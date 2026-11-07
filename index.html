@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f4">
+  <title>Entrelinhas — seu espaço para pensar</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 3.5h11l3 3V20a.5.5 0 0 1-.5.5h-13A.5.5 0 0 1 5 20V3.5Z"/><path d="M15.5 3.5V7H19M8.5 11h7M8.5 14.5h7M8.5 18h4"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.6-1.6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M14 7l5 5-5 5"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 12V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v6c0 4-2.5 7-6.5 7h-1c-2.2 0-3.5-1-4.7-2.6L4.5 14a1.5 1.5 0 0 1 2.4-1.8L8 13.5"/></symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24"><path d="m5 3 14 10-6 1-3 6L5 3Z"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6V4h16v2M12 4v16M9 20h6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m4 18 5-5 3 3 3-4 5 6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3Z"/></symbol>
+    <symbol id="i-attachment" viewBox="0 0 24 24"><path d="m8 12 6-6a4 4 0 0 1 5.7 5.7l-7.5 7.5a5 5 0 0 1-7.1-7.1l7.5-7.5M7 15l7.5-7.5a2 2 0 0 1 2.8 2.8l-7.5 7.5"/></symbol>
+  </svg>
+
+  <div class="app">
+    <aside class="sidebar">
+      <a class="brand" href="#" id="home-link" aria-label="Entrelinhas, início">
+        <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
+        <span>entrelinhas<span class="brand-dot">.</span></span>
+      </a>
+      <div class="workspace-label">SEU ESPAÇO <svg class="icon"><use href="#i-down"/></svg></div>
+      <div class="workspace-card">
+        <div class="workspace-avatar">E</div>
+        <div><strong>Meu espaço</strong><small>Plano pessoal</small></div>
+        <svg class="icon workspace-chevron"><use href="#i-down"/></svg>
+      </div>
+      <div class="side-section">
+        <div class="section-heading"><span>QUADROS</span><button class="icon-button side-add" id="new-board" title="Criar quadro" aria-label="Criar quadro"><svg class="icon"><use href="#i-plus"/></svg></button></div>
+        <div id="board-list" class="board-list"></div>
+      </div>
+      <button class="add-board" id="new-board-secondary"><svg class="icon"><use href="#i-plus"/></svg> Novo quadro</button>
+      <div class="sidebar-bottom">
+        <div class="sidebar-tip">
+          <div class="tip-icon"><svg class="icon"><use href="#i-sparkle"/></svg></div>
+          <strong>Ideias ficam melhores<br>quando se conectam.</strong>
+          <p>Seu espaço para organizar tudo o que passa pela cabeça.</p>
+        </div>
+        <div class="profile"><div class="profile-avatar">V</div><div><strong>Seu espaço criativo</strong><small>Feito para suas ideias</small></div><svg class="icon"><use href="#i-more"/></svg></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>Meu espaço</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="breadcrumb-title">Meu primeiro quadro</strong></div>
+        <div class="top-actions">
+          <span class="save-status"><span></span><span id="save-status">Salvo neste dispositivo</span></span>
+          <button class="icon-button" id="theme-toggle" title="Ativar tema escuro" aria-label="Ativar tema escuro" aria-pressed="false"><svg class="icon"><use href="#i-moon"/></svg></button>
+          <button class="icon-button export-button" id="export" title="Exportar quadro como JSON" aria-label="Exportar quadro"><svg class="icon"><use href="#i-export"/></svg></button>
+          <div class="top-avatar" title="Seu espaço">V</div>
+        </div>
+      </header>
+
+      <section class="home" id="home" hidden>
+        <div class="home-heading">
+          <div><div class="eyebrow"><span class="eyebrow-dot"></span> SEU ESPAÇO CRIATIVO</div><h1>Suas ideias, em um só lugar<span class="brand-dot">.</span></h1><p>Um espaço para organizar seus pensamentos e dar vida aos seus projetos.</p></div>
+          <button class="primary-button" id="home-new-board"><svg class="icon"><use href="#i-plus"/></svg> Novo quadro</button>
+        </div>
+        <div class="home-section-heading"><div><h2>Seus quadros</h2><p>Escolha um quadro para continuar criando.</p></div><span id="home-board-count"></span></div>
+        <div class="home-grid" id="home-grid"></div>
+        <input id="cover-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+      </section>
+
+      <div class="board-header">
+        <div>
+          <button id="folder-back" class="folder-back" type="button" hidden>← Voltar</button>
+          <h1 id="board-title" contenteditable="true" spellcheck="false" aria-label="Nome do quadro">Meu primeiro quadro</h1>
+        </div>
+        <div class="header-right">
+          <div class="members"><span>V</span><span class="member-add">+</span></div>
+          <button class="primary-button" id="add-note-header"><svg class="icon"><use href="#i-plus"/></svg> Adicionar nota</button>
+        </div>
+      </div>
+
+      <div class="canvas-shell" id="canvas-shell">
+        <div class="canvas-pattern"></div>
+        <div class="canvas-hint"><svg class="icon"><use href="#i-sparkle"/></svg> UM ESPAÇO PARA CRIAR SEM LIMITES</div>
+        <div class="canvas-viewport" id="viewport">
+          <div class="canvas-world" id="world">
+            <svg id="connections" class="connections" width="3000" height="2000" aria-label="Conexões entre notas">
+              <defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M1 1 7 4 1 7" fill="none" stroke="#a49ba8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+              <g id="connection-lines"></g>
+            </svg>
+            <div id="cards"></div>
+          </div>
+        </div>
+
+        <div class="floating-toolbar" aria-label="Ferramentas do quadro">
+          <button class="tool active" id="select-tool" title="Selecionar e mover notas" aria-label="Selecionar"><svg class="icon"><use href="#i-cursor"/></svg></button>
+          <button class="tool" id="hand-tool" title="Mover o quadro" aria-label="Mover quadro"><svg class="icon"><use href="#i-hand"/></svg></button>
+          <span class="tool-divider"></span>
+          <button class="tool" id="add-note" title="Adicionar nota" aria-label="Adicionar nota"><svg class="icon"><use href="#i-note"/></svg></button>
+          <button class="tool" id="add-sticky" title="Adicionar lembrete" aria-label="Adicionar lembrete"><span class="sticky-tool"></span></button>
+          <button class="tool" id="add-heading" title="Adicionar título" aria-label="Adicionar título"><svg class="icon"><use href="#i-text"/></svg></button>
+          <button class="tool" id="add-text" title="Adicionar texto formatável" aria-label="Adicionar texto formatável"><strong>T</strong></button>
+          <button class="tool" id="add-image" title="Adicionar imagem" aria-label="Adicionar imagem"><svg class="icon"><use href="#i-image"/></svg></button>
+          <button class="tool" id="add-document" title="Anexar documento" aria-label="Anexar documento"><svg class="icon"><use href="#i-attachment"/></svg></button>
+          <button class="tool" id="add-video" title="Anexar vídeo" aria-label="Anexar vídeo"><svg class="icon"><use href="#i-video"/></svg></button>
+          <button class="tool" id="add-folder" title="Adicionar pasta" aria-label="Adicionar pasta"><svg class="icon"><use href="#i-folder"/></svg></button>
+          <button class="tool" id="connect-tool" title="Conectar notas" aria-label="Conectar notas"><svg class="icon"><use href="#i-arrow"/></svg></button>
+          <span class="tool-divider"></span>
+          <button class="tool" id="delete-tool" title="Excluir nota selecionada" aria-label="Excluir nota selecionada"><svg class="icon"><use href="#i-trash"/></svg></button>
+        </div>
+        <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        <input id="document-input" type="file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.md,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp" hidden>
+        <input id="video-input" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" hidden>
+        <div class="format-toolbar" id="format-toolbar" role="toolbar" aria-label="Formatação de texto" hidden>
+          <span class="format-label">TEXTO</span>
+          <button type="button" data-command="bold" title="Negrito" aria-label="Negrito"><b>N</b></button>
+          <button type="button" data-command="italic" title="Itálico" aria-label="Itálico"><i>I</i></button>
+          <button type="button" data-command="underline" title="Sublinhado" aria-label="Sublinhado"><u>S</u></button>
+          <label class="format-color" title="Cor do texto">Cor <input id="text-color" type="color" value="#292834" aria-label="Cor do texto"></label>
+          <label class="format-size"><span class="sr-only">Tamanho do texto</span><select id="text-size" aria-label="Tamanho do texto"><option value="">Tamanho</option><option value="1">Muito pequeno</option><option value="2">Pequeno</option><option value="3">Normal</option><option value="4">Médio</option><option value="5">Grande</option><option value="6">Muito grande</option><option value="7">Enorme</option></select></label>
+        </div>
+        <div class="canvas-footer"><span class="canvas-footer-dot"></span> SEU CANTINHO DE IDEIAS <span class="footer-divider"></span> <span id="card-count">0 NOTAS</span></div>
+        <div class="zoom-controls"><button id="zoom-out" aria-label="Diminuir zoom">−</button><button id="zoom-level" title="Restaurar zoom">100%</button><button id="zoom-in" aria-label="Aumentar zoom">+</button><span></span><button id="fit-board" title="Centralizar quadro" aria-label="Centralizar quadro"><svg class="icon"><use href="#i-fit"/></svg></button></div>
+      </div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
