@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-relatorio-1";
+  const APP_VERSION = "2026-11-08-mobile-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -72,6 +72,10 @@
   let zoom = 1;
   let pan = { x: 0, y: 0 };
   let interaction = null;
+  const canvasTouches = new Map();
+  let pinch = null;
+  let viewWidth = 0;
+  let resizeViewTimer;
   let toastTimer;
   let textRange = null;
   let activeTextId = null;
@@ -1264,7 +1268,7 @@
     $("#zoom-level").textContent = `${Math.round(zoom * 100)}%`;
   }
 
-  function fitBoard() {
+  function fitBoard(minimumZoom = 0) {
     const cards = currentCanvas().cards;
     if (!cards.length) {
       zoom = 1;
@@ -1279,19 +1283,19 @@
       }));
       const availableWidth = Math.max(100, viewport.clientWidth - 48);
       const availableHeight = Math.max(100, viewport.clientHeight - 140);
-      zoom = Math.min(1, availableWidth / Math.max(1, right - left), availableHeight / Math.max(1, bottom - top));
+      zoom = Math.max(minimumZoom, Math.min(1, availableWidth / Math.max(1, right - left), availableHeight / Math.max(1, bottom - top)));
       pan = { x: (viewport.clientWidth - (right - left) * zoom) / 2 - left * zoom, y: 55 - top * zoom };
     }
     updateTransform();
   }
 
   function initialView() {
+    viewWidth = viewport.clientWidth;
     zoom = 1;
     pan = { x: 0, y: 0 };
-    const cards = currentCanvas().cards;
-    if (viewport.clientWidth < 600 && cards.length) {
-      const first = cards[0];
-      pan = { x: 20 - first.x, y: 58 - first.y };
+    if (viewport.clientWidth > 0 && viewport.clientWidth < 600 && currentCanvas().cards.length) {
+      fitBoard(0.2);
+      return;
     }
     updateTransform();
   }
@@ -1619,7 +1623,7 @@
   $("#zoom-in").addEventListener("click", () => { zoom = Math.min(1.75, Math.round((zoom + 0.1) * 100) / 100); updateTransform(); });
   $("#zoom-out").addEventListener("click", () => { zoom = Math.max(0.2, Math.round((zoom - 0.1) * 100) / 100); updateTransform(); });
   $("#zoom-level").addEventListener("click", () => { zoom = 1; updateTransform(); });
-  $("#fit-board").addEventListener("click", fitBoard);
+  $("#fit-board").addEventListener("click", () => fitBoard());
   $("#export").addEventListener("click", async () => {
     const board = currentBoard();
     const exported = JSON.parse(JSON.stringify(board));
@@ -1752,7 +1756,25 @@
   }
 
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || interaction) return;
+    if (event.button !== 0) return;
+    if (event.pointerType === "touch" && canvasTouches.size < 2 && ["select", "hand"].includes(mode) &&
+        !event.target.closest("[data-action], [contenteditable], video, .attachment-download, [data-resize-shape]")) {
+      canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (canvasTouches.size === 2 && interaction && ["pan", "card"].includes(interaction.type)) {
+        finishInteraction({ type: "pointercancel", pointerId: interaction.pointerId });
+        const [first, second] = [...canvasTouches.values()];
+        const bounds = viewport.getBoundingClientRect();
+        const center = { x: (first.x + second.x) / 2 - bounds.left, y: (first.y + second.y) / 2 - bounds.top };
+        pinch = {
+          distance: Math.max(1, Math.hypot(first.x - second.x, first.y - second.y)),
+          zoom, worldX: (center.x - pan.x) / zoom, worldY: (center.y - pan.y) / zoom
+        };
+        viewport.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+    }
+    if (interaction || pinch) return;
     const cardElement = event.target.closest("[data-card-id]");
     if (mode === "connect") return;
     const start = worldPoint(event);
@@ -1808,6 +1830,20 @@
     event.preventDefault();
   });
   viewport.addEventListener("pointermove", (event) => {
+    if (canvasTouches.has(event.pointerId)) {
+      canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+    if (pinch && canvasTouches.size >= 2 && canvasTouches.has(event.pointerId)) {
+      const [first, second] = [...canvasTouches.values()];
+      const bounds = viewport.getBoundingClientRect();
+      const centerX = (first.x + second.x) / 2 - bounds.left;
+      const centerY = (first.y + second.y) / 2 - bounds.top;
+      zoom = Math.max(Math.min(0.2, pinch.zoom), Math.min(1.75, pinch.zoom * Math.hypot(first.x - second.x, first.y - second.y) / pinch.distance));
+      pan = { x: centerX - pinch.worldX * zoom, y: centerY - pinch.worldY * zoom };
+      updateTransform();
+      event.preventDefault();
+      return;
+    }
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     const dx = event.clientX - interaction.startX;
     const dy = event.clientY - interaction.startY;
@@ -1891,8 +1927,31 @@
     }
     viewport.style.cursor = mode === "hand" ? "grab" : ["connect", "area", "shape", "draw"].includes(mode) ? "crosshair" : "default";
   }
-  viewport.addEventListener("pointerup", finishInteraction);
-  viewport.addEventListener("pointercancel", finishInteraction);
+  function finishPointer(event) {
+    const tracked = canvasTouches.delete(event.pointerId);
+    if (pinch && tracked) {
+      if (canvasTouches.size < 2) {
+        pinch = null;
+        if (event.type !== "pointercancel" && canvasTouches.size === 1) {
+          const [pointerId, point] = canvasTouches.entries().next().value;
+          interaction = { type: "pan", pointerId, startX: point.x, startY: point.y, x: pan.x, y: pan.y };
+        }
+      }
+      return;
+    }
+    finishInteraction(event);
+  }
+  viewport.addEventListener("pointerup", finishPointer);
+  viewport.addEventListener("pointercancel", finishPointer);
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeViewTimer);
+    resizeViewTimer = setTimeout(() => {
+      const width = viewport.clientWidth;
+      if (width > 0 && width < 600 && width !== viewWidth && currentBoard() && !interaction && !pinch && !editingText()) {
+        initialView();
+      }
+    }, 150);
+  });
   document.addEventListener("keydown", (event) => {
     if (!currentBoard()) return;
     if (event.key === "Escape") { setMode("select"); selectedId = null; selectedIds.clear(); renderCards(); }
