@@ -4,6 +4,7 @@
   const login = document.querySelector("#cloud-login");
   const logout = document.querySelector("#cloud-logout");
   const label = document.querySelector("#cloud-account");
+  const avatar = document.querySelector("#account-menu-toggle");
   const message = document.querySelector("#cloud-status");
   let client;
 
@@ -28,6 +29,23 @@
     login.hidden = Boolean(user);
     logout.hidden = !user;
     label.textContent = user ? `Conectado: ${user.email || "conta Google"}` : "Não conectado";
+    avatar.textContent = user?.email ? user.email.trim().charAt(0).toUpperCase() || "V" : "V";
+    const photo = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+    if (typeof photo === "string") {
+      try {
+        const url = new URL(photo);
+        if (url.protocol === "https:" && /^(?:[a-z0-9-]+\.)*googleusercontent\.com$/i.test(url.hostname)) {
+          const image = document.createElement("img");
+          image.src = url.href;
+          image.alt = "";
+          image.referrerPolicy = "no-referrer";
+          image.addEventListener("error", () => image.remove(), { once: true });
+          avatar.append(image);
+        }
+      } catch (error) {
+        console.warn("Endereço da foto de perfil inválido.", error);
+      }
+    }
     window.dispatchEvent(new CustomEvent("entrelinhas-session", { detail: { userId: user?.id || null } }));
   }
 

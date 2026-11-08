@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f4f7">
   <title>archivum — nem tudo que foi ocultado deveria ser esquecido</title>
-  <link rel="stylesheet" href="style.css?v=2026-11-08-tela-cheia-1">
+  <link rel="stylesheet" href="style.css?v=2026-11-08-conta-2">
 </head>
 <body>
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -74,12 +74,23 @@
         <div class="breadcrumbs"><span>Meu espaço</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="breadcrumb-title">Meu primeiro quadro</strong></div>
         <div class="top-actions">
           <span class="save-status"><span></span><span id="save-status">Salvo neste dispositivo</span></span>
-          <button class="backup-button" id="cloud-login" type="button" disabled>Entrar com Google</button>
-          <button class="backup-button" id="cloud-logout" type="button" hidden>Sair</button>
           <button class="backup-button" id="backup-all" type="button" title="Baixar backup dos quadros locais anteriores ao login">Backup local anterior</button>
           <button class="icon-button" id="theme-toggle" title="Ativar tema escuro" aria-label="Ativar tema escuro" aria-pressed="false"><svg class="icon"><use href="#i-moon"/></svg></button>
           <button class="icon-button export-button" id="export" title="Exportar quadro como JSON" aria-label="Exportar quadro"><svg class="icon"><use href="#i-export"/></svg></button>
-          <div class="top-avatar" title="Seu espaço">V</div>
+          <div class="account-controls">
+            <button class="top-avatar" id="account-menu-toggle" type="button" aria-label="Opções da conta" aria-controls="account-menu" aria-expanded="false">V</button>
+            <div class="account-menu" id="account-menu" hidden>
+              <strong>Conta</strong>
+              <div id="cloud-account" aria-live="polite">Não conectado</div>
+              <button class="account-menu-button" id="cloud-login" type="button" disabled>Entrar com Google</button>
+              <button class="account-menu-button" id="cloud-logout" type="button" hidden>Sair</button>
+              <strong>Configurações</strong>
+              <button class="account-menu-button" id="account-theme-toggle" type="button">Ativar tema escuro</button>
+              <button class="account-menu-button account-reset" id="account-reset-open" type="button">Resetar dados do site</button>
+              <button class="account-menu-button account-reset" type="button" disabled aria-describedby="account-delete-status">Excluir conta do site</button>
+              <p id="account-delete-status">Exclusão de conta indisponível: o serviço de exclusão segura ainda não está configurado.</p>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -106,7 +117,7 @@
           <h1 id="board-title" contenteditable="true" spellcheck="false" aria-label="Nome do quadro">Meu primeiro quadro</h1>
         </div>
         <div class="header-right">
-          <div class="members"><span>V</span><span class="member-add">+</span></div>
+          <button class="share-button" type="button" disabled title="O compartilhamento seguro ainda não está disponível">Compartilhamento indisponível</button>
           <button class="primary-button" id="add-note-header"><svg class="icon"><use href="#i-plus"/></svg> Adicionar nota</button>
         </div>
       </div>
@@ -176,10 +187,17 @@
       </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="backup-status" id="backup-status" role="status" aria-live="polite"></div>
-      <div class="cloud-account" id="cloud-account" aria-live="polite">Não conectado</div>
       <div class="cloud-status" id="cloud-status" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <dialog id="account-reset-dialog" class="image-frame-dialog" aria-labelledby="account-reset-title">
+    <h2 id="account-reset-title">Resetar dados do site</h2>
+    <p>O reset não apaga sua conta Google nem o usuário do Supabase Auth. Antes de excluir dados, exporte e confira os backups da conta e dos dados locais anteriores ao login na página inicial.</p>
+    <p id="account-reset-status">As opções estão indisponíveis: a recuperação segura e a proteção contra sincronização de dados antigos ainda não foram implementadas. Nenhum dado será excluído.</p>
+    <button class="account-menu-button" type="button" disabled aria-describedby="account-reset-status">Resetar somente este dispositivo</button>
+    <button class="account-menu-button" type="button" disabled aria-describedby="account-reset-status">Resetar este dispositivo e os dados da conta no Supabase</button>
+    <div class="image-frame-actions"><button id="account-reset-close" type="button">Fechar</button></div>
+  </dialog>
   <dialog id="image-frame-dialog" class="image-frame-dialog" aria-labelledby="image-frame-title">
     <h2 id="image-frame-title">Enquadramento da imagem</h2>
     <p>Os ajustes não alteram o arquivo original.</p>
@@ -214,10 +232,10 @@
   <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-tela-cheia-1"></script>
+  <script src="app.js?v=2026-11-08-conta-2"></script>
   <script src="backup.js?v=2026-11-08-archivum-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="cloud-auth.js?v=2026-11-08-diagnostico-1"></script>
+  <script src="cloud-auth.js?v=2026-11-08-conta-2"></script>
 </body>
 </html>

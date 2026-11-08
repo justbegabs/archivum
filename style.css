@@ -158,3 +158,24 @@ html[data-theme="dark"] .delete-board-button:hover{background:#44374c}
   body:not(.show-home):not(.mobile-controls-visible) .canvas-hint:after{content:"Toque no espaço vazio para abrir os menus";font-size:10px;letter-spacing:0}
   body:not(.show-home).mobile-controls-visible .canvas-hint{visibility:hidden}
 }
+.topbar{position:relative;z-index:12}
+.account-controls{position:relative;flex:none}
+.top-avatar{border:0;cursor:pointer}
+.top-avatar{position:relative;overflow:hidden;padding:0}
+.top-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.account-menu{position:absolute;right:0;top:calc(100% + 10px);width:min(280px,calc(100vw - 24px));padding:14px;display:grid;gap:10px;background:#fff;border:1px solid #e8dfeb;border-radius:10px;box-shadow:0 6px 24px #211b2b33;color:#51465c;font-size:12px}
+.account-menu[hidden],.account-menu-button[hidden]{display:none}
+.account-menu #cloud-account{position:static;display:block;color:inherit;font-size:12px;overflow-wrap:anywhere}
+.account-menu #cloud-login::after,.account-menu #cloud-logout::after{content:none}
+.account-menu-button{width:100%;padding:10px;border:1px solid #e8dfeb;border-radius:7px;background:#f8f5fa;color:#705b85;text-align:left;font-size:12px}
+.account-menu-button:disabled{opacity:.6;cursor:not-allowed}
+.account-reset{color:#a44949}
+.account-menu p{margin:0;line-height:1.5;color:#716b79}
+html[data-theme="dark"] .account-menu{background:#2b2730;border-color:#514654;color:#eee8f2}
+html[data-theme="dark"] .account-menu-button{background:#403448;border-color:#514654;color:#e3d3ee}
+html[data-theme="dark"] .account-reset{color:#efb5b5}
+html[data-theme="dark"] .account-menu p{color:#bcb2c5}
+@media(max-width:650px){body:not(.show-home) .topbar{z-index:12}.top-avatar{width:40px;height:40px}}
+.share-button{border:1px solid #e8dfeb;border-radius:7px;background:#f8f5fa;color:#716b79;padding:9px 10px;font-size:11px;cursor:not-allowed}
+html[data-theme="dark"] .share-button{background:#403448;border-color:#514654;color:#d4c7dc}
+@media(max-width:650px){.header-right{gap:6px}.share-button{max-width:125px;padding:7px;font-size:10px;line-height:1.2}}

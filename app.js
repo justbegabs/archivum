@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-tela-cheia-1";
+  const APP_VERSION = "2026-11-08-conta-2";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -48,6 +48,31 @@
   const world = $("#world");
   const viewport = $("#viewport");
   const status = $("#save-status");
+  const accountMenu = $("#account-menu");
+  const accountMenuToggle = $("#account-menu-toggle");
+  function closeAccountMenu() {
+    accountMenu.hidden = true;
+    accountMenuToggle.setAttribute("aria-expanded", "false");
+  }
+  accountMenuToggle.addEventListener("click", () => {
+    accountMenu.hidden = !accountMenu.hidden;
+    accountMenuToggle.setAttribute("aria-expanded", String(!accountMenu.hidden));
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".account-controls")) closeAccountMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !accountMenu.hidden) {
+      closeAccountMenu();
+      accountMenuToggle.focus();
+    }
+  });
+  $("#account-theme-toggle").addEventListener("click", () => $("#theme-toggle").click());
+  $("#account-reset-open").addEventListener("click", () => {
+    closeAccountMenu();
+    $("#account-reset-dialog").showModal();
+  });
+  $("#account-reset-close").addEventListener("click", () => $("#account-reset-dialog").close());
   const icon = (name) => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
   const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const id = () => `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -222,6 +247,7 @@
     button.setAttribute("aria-label", dark ? "Ativar tema claro" : "Ativar tema escuro");
     button.title = button.getAttribute("aria-label");
     button.innerHTML = icon(dark ? "sun" : "moon");
+    $("#account-theme-toggle").textContent = button.title;
     if (currentBoard()) {
       for (const card of currentCanvas().cards) {
         applyAppearance(card, cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`));
@@ -1186,6 +1212,7 @@
   function showHome() {
     hideFormatting();
     clearConnectionSelection();
+    closeAccountMenu();
     document.body.classList.remove("mobile-controls-visible");
     document.body.classList.add("show-home");
     $("#home").hidden = false;
@@ -1195,6 +1222,7 @@
   }
 
   function openBoard(boardId) {
+    closeAccountMenu();
     state.activeBoardId = boardId;
     folderPath = [];
     selectedId = null;
@@ -1952,7 +1980,10 @@
   });
   $("#select-tool").addEventListener("click", () => setMode("select"));
   $("#mobile-controls-open").addEventListener("click", () => document.body.classList.add("mobile-controls-visible"));
-  $("#mobile-controls-close").addEventListener("click", () => document.body.classList.remove("mobile-controls-visible"));
+  $("#mobile-controls-close").addEventListener("click", () => {
+    closeAccountMenu();
+    document.body.classList.remove("mobile-controls-visible");
+  });
   $("#hand-tool").addEventListener("click", () => setMode("hand"));
   $("#area-tool").addEventListener("click", () => setMode("area"));
   $("#shape-tool").addEventListener("click", () => setMode("shape"));

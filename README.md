@@ -48,7 +48,7 @@ O arquivo legado [supabase-setup.sql](supabase-setup.sql) prepara tabelas, convi
 
 O esquema legado não implementa a sincronização privada atual nem envia e-mails. Não use a chave secreta ou `service_role` no navegador.
 
-O botão **Entrar com Google** inicia a autenticação no projeto Supabase configurado; **Sair** encerra a sessão. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) pertence ao esquema legado e não é executada automaticamente.
+O menu da conta, no avatar da barra superior, mostra a conta conectada, sua foto Google quando disponível e as opções **Entrar com Google**, **Sair** e tema. As opções de reset local, reset completo e exclusão da conta no site estão indisponíveis: os fluxos de exclusão segura ainda não estão implementados. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) pertence ao esquema legado e não é executada automaticamente.
 
 Na página inicial, **Verificar dados locais** informa o número de quadros, arquivos referenciados, arquivos disponíveis e arquivos sem referência, além de alertar sobre referências ausentes. A verificação é somente leitura.
 
