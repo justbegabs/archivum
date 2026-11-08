@@ -116,6 +116,27 @@ window.editorFocusTest = (() => {
       assert(report.includes("Versão do aplicativo:") && report.includes("1 quadro(s) remoto(s)") &&
         report.includes("revisão remota 1") && !report.includes(owner) && !report.includes("Nota alterada"),
         "Diagnóstico não mostrou revisões ou expôs dados privados.");
+      const createUrl = URL.createObjectURL;
+      const revokeUrl = URL.revokeObjectURL;
+      const anchorClick = HTMLAnchorElement.prototype.click;
+      let exported;
+      try {
+        URL.createObjectURL = (blob) => { exported = blob; return "blob:diagnostic-test"; };
+        URL.revokeObjectURL = () => {};
+        HTMLAnchorElement.prototype.click = () => {};
+        const beforeExport = saves;
+        document.querySelector("#sync-diagnostic-export").click();
+        const text = await exported.text();
+        const data = JSON.parse(text);
+        assert(data.format === "entrelinhas-diagnostic-v1" && data.remoteBoards === 1 &&
+          data.boards[0].remoteRevision === 1 && !text.includes(owner) &&
+          !text.includes("focus-board") && !text.includes("Nota alterada") && saves === beforeExport,
+          "Relatório de diagnóstico expôs dados, não corresponde à leitura ou gravou na nuvem.");
+      } finally {
+        URL.createObjectURL = createUrl;
+        URL.revokeObjectURL = revokeUrl;
+        HTMLAnchorElement.prototype.click = anchorClick;
+      }
 
       const held = {};
       held.promise = new Promise((resolve) => { held.release = resolve; });
@@ -164,6 +185,23 @@ window.editorFocusTest = (() => {
       await wait(() => !document.querySelector("#sync-diagnostic-run").disabled);
       assert(document.querySelector("#sync-diagnostic").textContent.includes("Falha de rede") && saves === beforeProbe,
         "Diagnóstico não identificou a falha de rede ou tentou gravar dados.");
+      const createPartialUrl = URL.createObjectURL;
+      const partialAnchorClick = HTMLAnchorElement.prototype.click;
+      let partialBlob;
+      try {
+        URL.createObjectURL = (blob) => { partialBlob = blob; return "blob:diagnostic-offline-test"; };
+        HTMLAnchorElement.prototype.click = () => {};
+        document.querySelector("#sync-diagnostic-export").click();
+        const partialText = await partialBlob.text();
+        const partial = JSON.parse(partialText);
+        assert(partial.remoteQuery === "interrompida" && partial.errorCategory.includes("rede") &&
+          partial.accountFingerprint && !partialText.includes(owner) &&
+          !partialText.includes("Edição sem rede") && saves === beforeProbe,
+          "O relatório parcial de rede falhou ou expôs dados.");
+      } finally {
+        URL.createObjectURL = createPartialUrl;
+        HTMLAnchorElement.prototype.click = partialAnchorClick;
+      }
       online = true;
       window.dispatchEvent(new Event("online"));
       await wait(() => remote.board.cards[0].title === "Edição sem rede");

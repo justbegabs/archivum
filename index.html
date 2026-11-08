@@ -86,7 +86,7 @@
         <div class="migration-preflight" id="sync-recovery" hidden></div>
         <div class="migration-preflight" id="sync-conflicts" hidden></div>
         <div class="migration-preflight" id="sync-archive" hidden></div>
-        <div class="migration-preflight"><details><summary>Diagnóstico de sincronização</summary><p>Consulta somente leitura. Não compartilhe o identificador da conta ou os dados de quadros publicamente.</p><button class="backup-button" id="sync-diagnostic-run" type="button">Verificar agora</button><pre class="cloud-board-json" id="sync-diagnostic" role="status" aria-live="polite">Aguardando verificação.</pre></details></div>
+        <div class="migration-preflight"><details><summary>Diagnóstico de sincronização</summary><p>Consulta somente leitura. O relatório contém identificadores pseudonimizados, revisões e comparações, mas não contém quadros ou credenciais. Confira antes de compartilhar.</p><button class="backup-button" id="sync-diagnostic-run" type="button">Verificar agora</button><button class="backup-button" id="sync-diagnostic-export" type="button" disabled>Exportar relatório</button><pre class="cloud-board-json" id="sync-diagnostic" role="status" aria-live="polite">Aguardando verificação.</pre></details></div>
         <div class="migration-preflight" id="account-backup-panel" hidden><strong>Backup da conta</strong><p>Exporta dados locais e versões da nuvem. A restauração cria cópias sem substituir quadros existentes.</p><div class="migration-actions"><button class="backup-button" id="account-backup-export" type="button">Exportar backup da conta</button><button class="backup-button" id="account-backup-restore" type="button">Restaurar backup como cópias</button><input id="account-backup-input" type="file" accept="application/json,.json" hidden></div><p id="account-backup-status" role="status" aria-live="polite"></p></div>
         <div class="migration-preflight"><strong>Importar quadros deste navegador</strong><p>Faça e confira um backup dos dados locais anteriores ao login antes de importar. Os originais permanecerão neste navegador. O acesso entre dispositivos ainda precisa de validação no projeto Supabase real.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup local anterior</button><button class="backup-button" type="button" id="cloud-import">Enviar cópia dos quadros</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
         <div class="migration-preflight"><strong>Consultar cópias na conta</strong><p>Consulta adicional em formato JSON, somente leitura.</p><button class="backup-button" id="cloud-list" type="button">Consultar cópias na nuvem</button><p id="cloud-list-status" role="status" aria-live="polite"></p><div id="cloud-board-list"></div><div id="cloud-board-detail"></div></div>
@@ -168,10 +168,11 @@
   <script src="sync-import-core.js?v=2026-11-08-diagnostico-1"></script>
   <script src="account-backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-reconcile.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="sync-engine.js?v=2026-11-08-diagnostico-1"></script>
+  <script src="sync-diagnostic.js?v=2026-11-08-relatorio-1"></script>
+  <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-diagnostico-1"></script>
+  <script src="app.js?v=2026-11-08-relatorio-1"></script>
   <script src="backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>

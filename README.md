@@ -162,9 +162,31 @@ da sessão atual; a ausência de uma sincronização bem-sucedida não prova que
 houve sincronização. A próxima tentativa pode ser adiada por edição, rede ou pelo
 navegador em segundo plano.
 
+Após **Verificar agora**, use **Exportar relatório** em cada dispositivo. Os
+identificadores de conta e quadro são impressões SHA-256 abreviadas e estáveis:
+compare-os entre dispositivos e compartilhe o arquivo apenas com quem for ajudar.
+O relatório não contém documentos, nomes de quadros, credenciais, mensagens de
+erro originais nem hashes de documentos: estes são calculados localmente e
+representados apenas por indicadores de igualdade, para evitar expor impressões
+de conteúdo privado. As comparações incluem documento no editor, documento
+persistido, base comum e remoto; também mostram versão local, rascunhos pendentes,
+revisões e a ação que a reconciliação de documentos proporia, sem executá-la.
+Essa ação não inclui uma nova comparação entre anexos locais e remotos; um
+conflito de anexo anterior é indicado separadamente.
+
+O conflito exibido pode ser de uma tentativa anterior à consulta atual. O
+relatório registra separadamente a hora e as revisões e comparações observadas
+na tentativa que o produziu, quando disponíveis. Conflitos anteriores a esta
+versão não têm essa evidência histórica. As leituras não formam uma transação
+entre dispositivos: atividade durante a coleta é sinalizada, mas mudanças fora
+do intervalo de verificação, especialmente de conteúdo sem alteração de revisão,
+podem não ser detectadas. Enquanto a aplicação estiver aberta, sua sincronização
+automática normal continua; o próprio botão de diagnóstico não envia alterações
+nem resolve conflitos. Falhas da consulta geram relatório parcial sem documentos.
+
 As mensagens de diagnóstico no console mostram somente etapas, sem conteúdo ou
-tokens. A impressão da conta e identificadores abreviados aparecem apenas no
-painel local: trate-os como dados privados. A consulta verifica os anexos
+tokens. A impressão da conta e identificadores abreviados aparecem no painel e
+no relatório exportado: trate-os como dados pseudônimos. A consulta verifica os anexos
 referenciados, mas não prova que uma edição específica foi enviada; compare as
 revisões antes e depois de uma alteração. Erros são classificados de forma geral,
 e falhas de rede, autorização, RLS e Storage podem exigir investigação adicional.

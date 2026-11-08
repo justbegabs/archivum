@@ -78,7 +78,14 @@
             }
           }
           if (action === "conflict" || action === "remote-missing" || fileConflicts.length) {
-            results.push({ id, action: "conflict", reason: fileConflicts.length ? "file-mismatch" : action, remote: cloud, fileConflicts });
+            const base = baseById.get(id);
+            const equal = (first, second) => first && second ? core.canonical(first) === core.canonical(second) : null;
+            results.push({ id, action: "conflict", reason: fileConflicts.length ? "file-mismatch" : action, remote: cloud, fileConflicts,
+              evidence: { capturedAt: new Date().toISOString(), baseRevision: base?.revision ?? null,
+                remoteRevision: cloud?.revision ?? null, baseDeleted: base?.deleted === true,
+                remoteDeleted: cloud?.deleted === true, localPresent: Boolean(board),
+                localEqualsBase: equal(board, base?.board), remoteEqualsBase: equal(cloud?.board, base?.board),
+                localEqualsRemote: equal(board, cloud?.board), attachmentConflicts: fileConflicts.length } });
             continue;
           }
 

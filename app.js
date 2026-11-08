@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-diagnostico-1";
+  const APP_VERSION = "2026-11-08-relatorio-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -14,9 +14,15 @@
       ((!syncing || syncEpoch === accountEpoch) && !editingText()))
   );
   accountAdapter.deferRemote = () => editingText();
-  const diagnostic = { stage: "aguardando", attempt: null, success: null, error: null, run: 0 };
+  const diagnostic = { stage: "aguardando", attempt: null, success: null, error: null, run: 0, events: [] };
+  let diagnosticReport = null;
+  function diagnosticEvent(stage) {
+    diagnostic.events.push({ at: new Date().toISOString(), attempt: diagnostic.run, stage });
+    if (diagnostic.events.length > 80) diagnostic.events.shift();
+  }
   const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter, window.EntrelinhasImportCore, (stage) => {
     diagnostic.stage = stage;
+    diagnosticEvent(stage);
     console.info("[Entrelinhas diagnóstico]", stage);
   });
   let account = null;
@@ -375,6 +381,7 @@
     diagnostic.attempt = new Date().toISOString();
     diagnostic.run += 1;
     diagnostic.error = null;
+    diagnosticEvent("início da tentativa");
     syncBarrier = new Promise((resolve) => { releaseSync = resolve; });
     syncEpoch = accountEpoch;
     const syncStartBoards = window.EntrelinhasImportCore.canonical(state.boards);
@@ -402,7 +409,12 @@
         renderAccountArchive(record.archive);
       }
       const conflicts = results.filter((result) => result.action === "conflict");
+      for (const conflict of conflicts) {
+        conflict.diagnosticAttempt = diagnostic.run;
+        conflict.diagnosticAttemptAt = diagnostic.attempt;
+      }
       syncConflicts = conflicts;
+      diagnosticEvent(conflicts.length ? "conflito registrado" : "tentativa concluída");
       renderSyncConflicts();
       if (conflicts.length) {
         diagnostic.stage = "conflito";
@@ -420,6 +432,7 @@
       }
     } catch (error) {
       diagnostic.error = `Falha na etapa ${diagnostic.stage}. Consulte a mensagem de estado do editor.`;
+      diagnosticEvent("falha na tentativa");
       console.info("[Entrelinhas diagnóstico] falha na etapa", diagnostic.stage);
       console.error("Falha na sincronização:", error);
       if (account === owner) {
@@ -469,6 +482,9 @@
     diagnostic.success = null;
     diagnostic.error = null;
     diagnostic.run = 0;
+    diagnostic.events = [];
+    diagnosticReport = null;
+    $("#sync-diagnostic-export").disabled = true;
     $("#sync-diagnostic").textContent = "Aguardando verificação.";
     $("#account-backup-panel").hidden = !owner;
     accountQueue = Promise.resolve();
@@ -548,6 +564,21 @@
     const output = $("#sync-diagnostic");
     const owner = account;
     const generation = sessionGeneration;
+    const started = new Date().toISOString();
+    const startEpoch = accountEpoch;
+    const startRun = diagnostic.run;
+    const syncAtStart = syncing;
+    const visible = structuredClone(state.boards);
+    const capturedConflicts = syncConflicts.map(({ id, reason, remote, evidence, diagnosticAttempt, diagnosticAttemptAt }) => ({
+      id, reason, remote: remote ? { board: structuredClone(remote.board), revision: remote.revision } : null,
+      evidence: evidence ? { ...evidence } : null, diagnosticAttempt, diagnosticAttemptAt
+    }));
+    const journals = () => Object.keys(localStorage)
+      .filter((key) => key.startsWith(`entrelinhas-draft-v1:${owner}:`))
+      .sort().map((key) => [key, localStorage.getItem(key)]);
+    const initialJournals = owner ? journals() : [];
+    diagnosticReport = null;
+    $("#sync-diagnostic-export").disabled = true;
     const lines = [
       `Versão do aplicativo: ${APP_VERSION}`,
       `Autenticação: ${owner ? "conta conectada" : "não conectada"}`,
@@ -565,13 +596,15 @@
     button.disabled = true;
     output.textContent = lines.join("\n") + "\nConsultando…";
     let stage = "autenticação";
+    let accountFingerprint = null;
     try {
       if (!owner) {
         lines.push("Supabase: entre na conta para verificar.");
       } else {
         const { client, userId } = await window.entrelinhasCloudAuth.requireSession();
         if (userId !== owner || generation !== sessionGeneration) throw new Error("A conta conectada mudou.");
-        lines.push(`Conta (impressão SHA-256, compare nos dispositivos): ${await diagnosticHash(owner.toLowerCase())}`);
+        accountFingerprint = await diagnosticHash(owner.toLowerCase());
+        lines.push(`Conta (impressão SHA-256, compare nos dispositivos): ${accountFingerprint}`);
         stage = "leitura local";
         const record = await accountStore.read(owner);
         stage = "consulta remota";
@@ -582,8 +615,11 @@
         for (const row of listed) {
           const item = await window.EntrelinhasImportCore.loadBoard(client, owner, row.id);
           if (item.revision !== row.revision) throw new Error("A revisão mudou durante a consulta.");
-          remote.push(item);
+          remote.push({ ...item, remoteId: row.id });
         }
+        stage = "verificação de consistência";
+        const listedAgain = await window.EntrelinhasImportCore.listBoards(client, owner);
+        const finalRecord = await accountStore.read(owner);
         const currentSession = await window.entrelinhasCloudAuth.requireSession();
         if (currentSession.userId !== owner || generation !== sessionGeneration) throw new Error("A conta conectada mudou.");
         const bases = new Map(record.baseline.map((entry) => [entry.board.id, entry]));
@@ -594,18 +630,72 @@
           const base = bases.get(id);
           const cloud = clouds.get(id);
           const local = record.boards.some((board) => board.id === id);
-          const conflict = syncConflicts.find((item) => item.id === id);
-          lines.push(`Quadro ${await diagnosticHash(id)}: local ${local ? "sim" : "não"}; revisão comum ${base?.revision ?? "nenhuma"}; revisão remota ${cloud?.revision ?? "não encontrada"}${cloud?.deleted ? " (excluído)" : ""}; ${conflict ? `conflito (${conflict.reason})` : "sem conflito registrado"}.`);
+          const conflict = capturedConflicts.find((item) => item.id === id);
+          lines.push(`Quadro ${await diagnosticHash(id)}: local ${local ? "sim" : "não"}; revisão comum ${base?.revision ?? "nenhuma"}; revisão remota ${cloud?.revision ?? "não encontrada"}${cloud?.deleted ? " (excluído)" : ""}; ${conflict ? `conflito anterior (${conflict.reason})` : "sem conflito registrado"}.`);
         }
         lines.push("A revisão comum é a última versão remota reconhecida localmente; alterações locais pendentes não têm número de revisão próprio.");
+        const finalJournals = journals();
+        const core = window.EntrelinhasImportCore;
+        const meta = {
+          appVersion: APP_VERSION, pendingJournals: finalJournals.length,
+          journalChangedDuringRead: core.canonical(initialJournals) !== core.canonical(finalJournals),
+          localChangedDuringRead: record.version !== finalRecord.version,
+          editorChangedDuringRead: startEpoch !== accountEpoch,
+          remoteListChangedDuringRead: core.canonical(listed) !== core.canonical(listedAgain),
+          syncInProgress: syncAtStart || syncing, syncAttemptChangedDuringRead: startRun !== diagnostic.run,
+          lastAttempt: diagnostic.attempt, lastSuccess: diagnostic.success, lastStage: diagnostic.stage,
+          lastErrorCategory: diagnostic.error ? "falha de sincronização" : null, attempts: diagnostic.run,
+          blocked: accountBlocked, online: navigator.onLine,
+          nextAttempt: syncRequestedAt ? new Date(syncRequestedAt).toISOString() : null,
+          events: diagnostic.events.map((item) => ({ ...item }))
+        };
+        const report = await window.EntrelinhasDiagnostic.report({ owner, record, visible, remote, conflicts: capturedConflicts, meta });
+        const finalSession = await window.entrelinhasCloudAuth.requireSession();
+        if (finalSession.userId !== owner || generation !== sessionGeneration || account !== owner) throw new Error("A conta conectada mudou.");
+        report.editorChangedDuringRead ||= startEpoch !== accountEpoch;
+        report.syncInProgress ||= syncing;
+        report.syncAttemptChangedDuringRead ||= startRun !== diagnostic.run;
+        report.readStartedAt = started;
+        report.readCompletedAt = new Date().toISOString();
+        diagnosticReport = report;
+        if (report.reconciliationError) {
+          lines.push("Reconciliação atual inconsistente ou inválida; o relatório não indica um plano para os quadros.");
+        }
+        if (report.localChangedDuringRead || report.editorChangedDuringRead || report.remoteListChangedDuringRead ||
+            report.journalChangedDuringRead || report.syncInProgress || report.syncAttemptChangedDuringRead) {
+          lines.push("Atenção: houve atividade durante a coleta; as leituras podem não representar o mesmo instante. Verifique novamente.");
+        }
+        lines.push("O conflito registrado pertence a uma tentativa anterior; compare sua captura com a leitura atual no relatório.");
+        $("#sync-diagnostic-export").disabled = false;
       }
     } catch (error) {
       console.info("[Entrelinhas diagnóstico] falha na consulta:", stage);
       lines.push(`Supabase: verificação interrompida em ${stage}. ${diagnosticError(error)}`);
+      if (generation === sessionGeneration && account === owner) {
+        diagnosticReport = {
+          format: "entrelinhas-diagnostic-v1", appVersion: APP_VERSION, readStartedAt: started,
+          readCompletedAt: new Date().toISOString(), errorStage: stage, errorCategory: diagnosticError(error),
+          authentication: accountFingerprint ? "conta verificada inicialmente" : "não verificada",
+          accountFingerprint, remoteQuery: "interrompida",
+          online: navigator.onLine, attempts: diagnostic.run, lastAttempt: diagnostic.attempt,
+          lastSuccess: diagnostic.success, events: diagnostic.events.map((item) => ({ ...item }))
+        };
+        $("#sync-diagnostic-export").disabled = false;
+      }
     } finally {
       if (generation === sessionGeneration) output.textContent = lines.join("\n");
       button.disabled = false;
     }
+  });
+
+  $("#sync-diagnostic-export").addEventListener("click", () => {
+    if (!diagnosticReport) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(diagnosticReport, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "entrelinhas-diagnostico.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
   function renderRecovery(keys) {

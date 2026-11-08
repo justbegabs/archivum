@@ -91,6 +91,28 @@ window.runEditorSyncTests = async function () {
     row().revision += 1;
     await wait(() => !document.querySelector("#sync-conflicts").hidden, "Conflito não foi exibido.");
     assert(title().includes("Edição local") && row().board.title === "Edição remota", "Uma versão foi sobrescrita.");
+    document.querySelector("#sync-diagnostic-run").click();
+    await wait(() => !document.querySelector("#sync-diagnostic-run").disabled, "Diagnóstico não terminou.");
+    const diagnosticCreateUrl = URL.createObjectURL;
+    const diagnosticAnchorClick = HTMLAnchorElement.prototype.click;
+    let reportBlob;
+    try {
+      URL.createObjectURL = (blob) => { reportBlob = blob; return "blob:diagnostic-test"; };
+      HTMLAnchorElement.prototype.click = () => {};
+      document.querySelector("#sync-diagnostic-export").click();
+      const reportText = await reportBlob.text();
+      const data = JSON.parse(reportText);
+      const conflict = data.boards.find((item) => item.previousConflict);
+      assert(conflict?.previousConflict.observed?.localEqualsBase === false &&
+        conflict.previousConflict.observed.remoteEqualsBase === false &&
+        conflict.previousConflict.observed.remoteRevision === row().revision &&
+        conflict.currentPlan === "conflict" && !reportText.includes("Edição local") &&
+        !reportText.includes("Edição remota") && !reportText.includes(owner) &&
+        row().board.title === "Edição remota", "Relatório não preservou evidência ou alterou dados.");
+    } finally {
+      URL.createObjectURL = diagnosticCreateUrl;
+      HTMLAnchorElement.prototype.click = diagnosticAnchorClick;
+    }
     [...document.querySelectorAll("#sync-conflicts button")].find((button) => button.textContent === "Manter local").click();
     await wait(() => row().board.title === "Edição local", "Resolução não foi sincronizada.");
     const store = window.EntrelinhasAccountStore.create(indexedDB);
