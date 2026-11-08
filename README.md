@@ -44,6 +44,17 @@ implementação dos novos requisitos de compartilhamento. A substituição desse
 modelo deverá exigir novos convites também para os acessos antigos, conforme
 solicitado, e será apresentada para revisão antes de qualquer execução.
 
+A migração em desenvolvimento [202611080003_board_members.sql](migrations/202611080003_board_members.sql)
+adiciona membros, convites por e-mail confirmado com aceite ou recusa, alteração
+de permissões, leitura de anexos referenciados e edição por revisão. Ela é
+**incompleta e não deve ser aplicada ou ativada**:
+faltam integração ao editor, links públicos e privados, envio de anexos por
+editores, gestão de participantes e testes de integração entre contas reais.
+O acesso a arquivos já baixados por um participante não pode ser revogado.
+Teste somente em PostgreSQL isolado com `PGLITE_PACKAGE_DIR` configurado e
+`node --test tests\board-members.postgres.test.js`. Não execute a migração no
+Supabase real antes de concluir e revisar o fluxo completo e suas políticas.
+
 O arquivo legado [supabase-setup.sql](supabase-setup.sql) prepara tabelas, convites por e-mail confirmado, regras de acesso, um bucket privado e notificações de alterações. Ele não deve ser executado para habilitar o novo compartilhamento seguro. O script interrompe a operação se o bucket existente for público. Os limites de upload dependem também da configuração e do plano do Supabase.
 
 O esquema legado não implementa a sincronização privada atual nem envia e-mails. Não use a chave secreta ou `service_role` no navegador.
