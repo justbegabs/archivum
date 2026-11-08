@@ -75,7 +75,29 @@ test("arquivo diferente com mesmo identificador é conflito", async () => {
   });
   const result = await create(f.adapter, f.operations).run(owner);
   assert.equal(result[0].reason, "file-mismatch");
+  assert.deepEqual(result[0].fileConflicts, ["img"]);
   assert.deepEqual(f.events, []);
+});
+
+test("conflito de anexo de outro quadro é detectado antes de baixar", async () => {
+  const f = fixture({ remote: [entry("Remoto", 0, new Map([["img", new Blob(["remoto"])]]))] });
+  f.adapter.readFile = async () => new Blob(["local de outro quadro"]);
+  const result = await create(f.adapter, f.operations).run(owner);
+  assert.equal(result[0].reason, "file-mismatch");
+  assert.deepEqual(result[0].fileConflicts, ["img"]);
+  assert.deepEqual(f.events, []);
+});
+
+test("envia resolução com novo identificador mesmo quando o antigo permanece arquivado", async () => {
+  const f = fixture({
+    local: [board("Editado")], baseline: [entry("Original")],
+    remote: [entry("Original", 0, new Map([["img", new Blob(["remoto"])]]))],
+    localFiles: new Map([["novo", new Blob(["selecionado"])]] )
+  });
+  f.adapter.readFile = async () => new Blob(["anterior arquivado"]);
+  const result = await create(f.adapter, f.operations).run(owner);
+  assert.equal(result[0].action, "upload");
+  assert.deepEqual(f.events[0], ["save", "Editado", 0]);
 });
 
 test("edição local concorrente impede aplicar a versão remota", async () => {

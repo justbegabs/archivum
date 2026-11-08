@@ -41,7 +41,8 @@ window.runEditorSyncTests = async function () {
       if (!online) throw new Error("Rede simulada indisponível");
       const row = rows.get(userId)?.get(value.id);
       if (!row || row.revision !== revision) throw new Error("Conflito de revisão");
-      assert(await files.get("image").text() === "imagem", "Anexo não enviado.");
+      const attachment = files.get(value.cards[0].imageId);
+      assert(attachment && ["imagem", "remoto", "remoto 2"].includes(await attachment.text()), "Anexo não enviado.");
       rows.get(userId).set(value.id, { board: structuredClone(value), files, revision: revision + 1, deleted: options.deleted });
       return { revision: revision + 1 };
     },
@@ -117,11 +118,95 @@ window.runEditorSyncTests = async function () {
     await wait(() => title().includes("(restaurado)"), "Versão arquivada não foi restaurada.");
     await wait(() => rows.get(owner).size === 3, "Versão restaurada não foi enviada.");
 
+    row().files.set("image", new File(["remoto"], "remoto.png", { type: "image/png", lastModified: 2 }));
+    row().revision += 1;
+    window.dispatchEvent(new Event("online"));
+    await wait(() => document.querySelector("#sync-conflicts select"), "Conflito de anexo não apareceu.");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    document.querySelector("#sync-conflicts select").value = "remote";
+    [...document.querySelectorAll("#sync-conflicts button")].find((button) => button.textContent === "Manter nuvem").click();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    assert(row().board.cards[0].imageId !== "image",
+      `Escolha do anexo não foi sincronizada: ${document.querySelector("#save-status").textContent}; ${document.querySelector("#toast").textContent}; ${document.querySelector("#sync-conflicts").textContent}`);
+    const changedKey = row().board.cards[0].imageId;
+    assert(await row().files.get(changedKey).text() === "remoto", "Versão remota do anexo não foi selecionada.");
+    await wait(() => document.querySelector("#sync-conflicts").hidden && document.querySelector("#save-status").textContent === "Salvo na nuvem",
+      "Primeira resolução não terminou.");
+    const verify = window.EntrelinhasAccountStore.create(indexedDB);
+    assert(await (await verify.readFile(owner, "image")).text() === "imagem", "Anexo local original foi perdido.");
+    const archived = await verify.read(owner);
+    const previous = archived.archive.find((item) => item.reason === "versão local antes da resolução" &&
+      item.board.cards[0]?.imageId === "image");
+    assert(previous, "Versão local não foi arquivada.");
+    await verify.close();
+
+    row().files.set(changedKey, new File(["remoto 2"], "remoto2.png", { type: "image/png", lastModified: 3 }));
+    row().revision += 1;
+    window.dispatchEvent(new Event("online"));
+    await wait(() => document.querySelector("#sync-conflicts select"), "Segundo conflito de anexo não apareceu.");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    document.querySelector("#sync-conflicts select").value = "local";
+    [...document.querySelectorAll("#sync-conflicts button")].find((button) => button.textContent === "Manter local").click();
+    await wait(() => row().board.cards[0].imageId !== changedKey, "Versão local do anexo não foi sincronizada.");
+    const localKey = row().board.cards[0].imageId;
+    assert(await row().files.get(localKey).text() === "remoto", "Arquivo local escolhido foi perdido.");
+    await wait(() => document.querySelector("#sync-conflicts").hidden && document.querySelector("#save-status").textContent === "Salvo na nuvem",
+      "Segunda resolução não terminou.");
+    const verifyAgain = window.EntrelinhasAccountStore.create(indexedDB);
+    const secondArchive = await verifyAgain.read(owner);
+    let remotePreserved = false;
+    for (const item of secondArchive.archive.filter((entry) => entry.reason === "versão remota antes da resolução")) {
+      const attachment = await verifyAgain.readFile(owner, item.board.cards[0].imageId);
+      if (attachment && await attachment.text() === "remoto 2") remotePreserved = true;
+    }
+    assert(remotePreserved, "Versão remota do segundo conflito não foi preservada.");
+    await verifyAgain.close();
+
+    row().files.set(localKey, new File(["remoto 2"], "remoto2.png", { type: "image/png", lastModified: 3 }));
+    row().revision += 1;
+    window.dispatchEvent(new Event("online"));
+    await wait(() => document.querySelector("#sync-conflicts select"), "Terceiro conflito de anexo não apareceu.");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    document.querySelector("#sync-conflicts select").value = "remote";
+    [...document.querySelectorAll("#sync-conflicts button")].find((button) => button.textContent === "Preservar ambas").click();
+    await wait(() => row().board.cards[0].imageId !== localKey && title().includes("(cópia local)"),
+      "As versões do quadro com anexo conflitante não foram preservadas.");
+    await wait(() => document.querySelector("#sync-conflicts").hidden && document.querySelector("#save-status").textContent === "Salvo na nuvem",
+      "Terceira resolução não terminou.");
+
+    const anchorClick = HTMLAnchorElement.prototype.click;
+    let download;
+    HTMLAnchorElement.prototype.click = function () { download = fetch(this.href).then((response) => response.text()); };
+    try {
+      document.querySelector("#account-backup-export").click();
+      await wait(() => Boolean(download), "Backup da conta não foi exportado.");
+      const text = await download;
+      const fileInput = document.querySelector("#account-backup-input");
+      const damaged = JSON.parse(text);
+      damaged.payload.record.boards[0].title = "conteúdo alterado";
+      const invalid = new DataTransfer();
+      invalid.items.add(new File([JSON.stringify(damaged)], "backup-invalido.json", { type: "application/json" }));
+      fileInput.files = invalid.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await wait(() => document.querySelector("#account-backup-status").textContent.includes("Integridade do backup inválida"),
+        "Backup adulterado não foi rejeitado.");
+      assert(!title().includes("(backup)"), "Backup inválido alterou o editor.");
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([text], "backup.json", { type: "application/json" }));
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await wait(() => document.querySelector("#account-backup-status").textContent.includes("restaurados como cópias"),
+        "Backup não foi restaurado.");
+      assert(title().includes("(backup)"), "Cópia do backup não apareceu no editor.");
+    } finally {
+      HTMLAnchorElement.prototype.click = anchorClick;
+    }
+
     session(other);
     await wait(() => title() === "", "Quadros de outra conta apareceram.");
     session(owner);
     await wait(() => title().includes("Outra edição remota") && title().includes("(restaurado)"), "Quadros da conta não foram restaurados.");
-    return ["carregamento no editor", "anexo e formatação", "salvamento", "offline e reconexão", "conflito e arquivo", "preservar ambas", "exclusão e restauração", "troca de conta"];
+    return ["carregamento no editor", "anexo e formatação", "salvamento", "offline e reconexão", "conflito e arquivo", "preservar ambas", "exclusão e restauração", "conflito de anexo", "backup e restauração", "troca de conta"];
   } finally {
     session(null);
     Object.assign(core, {
@@ -139,10 +224,16 @@ window.runEditorSyncTests = async function () {
       const tx = db.transaction(["accounts", "files"], "readwrite");
       for (const id of [owner, other]) {
         tx.objectStore("accounts").delete(id);
-        tx.objectStore("files").delete([id, "image"]);
         const prefix = `entrelinhas-draft-v1:${id}:`;
         Object.keys(localStorage).filter((key) => key.startsWith(prefix)).forEach((key) => localStorage.removeItem(key));
       }
+      const cursor = tx.objectStore("files").openCursor();
+      cursor.onsuccess = () => {
+        const item = cursor.result;
+        if (!item) return;
+        if ([owner, other].includes(item.key[0])) item.delete();
+        item.continue();
+      };
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Limpeza dos dados de teste cancelada."));

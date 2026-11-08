@@ -125,6 +125,41 @@
       });
     }
 
+    async function snapshot(ownerId) {
+      const owner = userKey(ownerId);
+      const db = await database();
+      const snapshot = await new Promise((resolve, reject) => {
+        const tx = db.transaction(["accounts", "files"], "readonly");
+        const account = tx.objectStore("accounts").get(owner);
+        const files = [];
+        const cursor = tx.objectStore("files").openCursor();
+        cursor.onsuccess = () => {
+          const item = cursor.result;
+          if (!item) return;
+          if (Array.isArray(item.key) && item.key[0] === owner) files.push([item.key[1], item.value]);
+          item.continue();
+        };
+        tx.oncomplete = () => {
+          try {
+            const record = account.result || empty();
+            validate(record);
+            resolve({ record, files });
+          } catch (error) { reject(error); }
+        };
+        tx.onerror = () => reject(tx.error || new Error("Falha ao ler o backup da conta."));
+        tx.onabort = () => reject(tx.error || new Error("Leitura do backup cancelada."));
+      });
+      const files = new Map();
+      for (const [key, metadata] of snapshot.files) {
+        if (typeof key !== "string" || !key || !metadata ||
+            !sameMetadata(metadata, await fingerprint(metadata.blob))) {
+          throw new Error(`O arquivo local ${key} falhou na verificação de integridade.`);
+        }
+        files.set(key, metadata.blob);
+      }
+      return { record: snapshot.record, files };
+    }
+
     async function putFiles(ownerId, files) {
       const owner = userKey(ownerId);
       if (!(files instanceof Map)) throw new Error("Lista de arquivos inválida.");
@@ -161,7 +196,7 @@
       opening = null;
     }
 
-    return { read, update, readFile, putFiles, close };
+    return { read, update, readFile, snapshot, putFiles, close };
   }
 
   return { create };

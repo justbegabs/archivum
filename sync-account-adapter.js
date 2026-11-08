@@ -58,6 +58,7 @@
     return {
       session,
       read: (ownerId) => store.read(ownerId),
+      readFile: (ownerId, key) => store.readFile(ownerId, key),
       files,
       stageFiles: (ownerId, incoming) => store.putFiles(ownerId, incoming),
       commit,

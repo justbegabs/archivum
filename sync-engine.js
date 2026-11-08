@@ -21,13 +21,6 @@
     return await digest(first) === await digest(second);
   }
 
-  async function checkSharedFiles(localFiles, remoteFiles) {
-    for (const [key, remote] of remoteFiles) {
-      if (localFiles.has(key) && !await sameFile(localFiles.get(key), remote)) return false;
-    }
-    return true;
-  }
-
   // O adaptador deve isolar contas e gravar estado e base juntos com CAS.
   function create(adapter, operations = core) {
     let active = false;
@@ -67,16 +60,20 @@
           await checkSession(ownerId);
           const board = localById.get(id);
           const cloud = remoteById.get(id);
-          if (action === "conflict" || action === "remote-missing") {
-            results.push({ id, action: "conflict", reason: action, remote: cloud });
-            continue;
-          }
-
           let localFiles = new Map();
           const deletionBoard = action === "delete-remote" ? baseById.get(id)?.board : null;
-          if (board || deletionBoard) localFiles = await adapter.files(ownerId, board || deletionBoard);
-          if (cloud && (board || deletionBoard) && !await checkSharedFiles(localFiles, cloud.files)) {
-            results.push({ id, action: "conflict", reason: "file-mismatch", remote: cloud });
+          if (board) localFiles = await adapter.files(ownerId, board);
+          else if (deletionBoard) localFiles = cloud.files;
+          const fileConflicts = [];
+          if (cloud && action !== "delete-remote") {
+            const stagesRemote = ["download", "adopt", "delete-local", "adopt-delete", "conflict"].includes(action);
+            for (const [key, file] of cloud.files) {
+              const local = localFiles.get(key) || (stagesRemote && adapter.readFile && await adapter.readFile(ownerId, key));
+              if (local && !await sameFile(local, file)) fileConflicts.push(key);
+            }
+          }
+          if (action === "conflict" || action === "remote-missing" || fileConflicts.length) {
+            results.push({ id, action: "conflict", reason: fileConflicts.length ? "file-mismatch" : action, remote: cloud, fileConflicts });
             continue;
           }
 

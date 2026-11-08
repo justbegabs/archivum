@@ -400,6 +400,7 @@
     $("#sync-recovery").hidden = true;
     document.querySelector(".app").inert = true;
     account = owner;
+    $("#account-backup-panel").hidden = !owner;
     accountQueue = Promise.resolve();
     accountBlocked = false;
     accountEpoch += 1;
@@ -602,6 +603,46 @@
         : "Compare as versões antes de escolher. A versão não escolhida será arquivada localmente.";
       container.append(title, info);
       if (!conflict.remote) continue;
+      const fileChoices = new Map();
+      for (const key of conflict.fileConflicts || []) {
+        const owner = account;
+        const label = document.createElement("label");
+        label.textContent = `Anexo ${key}: `;
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `Versão do anexo ${key}`);
+        for (const [value, text] of [["", "Escolha uma versão"], ["local", "Usar arquivo local"], ["remote", "Usar arquivo da nuvem"]]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = text;
+          select.append(option);
+        }
+        label.append(select);
+        container.append(label);
+        for (const [source, text] of [["local", "Baixar arquivo local"], ["remote", "Baixar arquivo da nuvem"]]) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "backup-button";
+          button.textContent = text;
+          button.addEventListener("click", async () => {
+            try {
+              const file = source === "local" ? await accountStore.readFile(owner, key) : conflict.remote.files.get(key);
+              if (account !== owner || !(file instanceof Blob)) throw new Error("Arquivo indisponível ou conta alterada.");
+              const url = URL.createObjectURL(file);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = file instanceof File ? file.name : `anexo-${source}`;
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (error) {
+              console.error("Falha ao abrir anexo do conflito:", error);
+              status.textContent = `Não foi possível abrir o anexo: ${error.message}`;
+              status.parentElement.classList.add("error");
+            }
+          });
+          container.append(button);
+        }
+        fileChoices.set(key, select);
+      }
       for (const [label, board] of [["Local", local], ["Nuvem", conflict.remote.deleted ? null : conflict.remote.board]]) {
         const details = document.createElement("details");
         const summary = document.createElement("summary");
@@ -617,17 +658,21 @@
         button.type = "button";
         button.className = "backup-button";
         button.textContent = label;
-        button.addEventListener("click", () => resolveConflict(conflict, choice));
+        button.addEventListener("click", () => resolveConflict(conflict, choice, fileChoices));
         container.append(button);
       }
     }
   }
 
-  async function resolveConflict(conflict, choice) {
+  async function resolveConflict(conflict, choice, fileChoices) {
     const owner = account;
     const epoch = accountEpoch;
     if (!owner || accountBlocked || syncing || resolvingConflict) {
       showToast("Aguarde a sincronização antes de resolver o conflito.");
+      return;
+    }
+    if ([...fileChoices.values()].some((select) => !select.value)) {
+      showToast("Escolha qual versão de cada anexo utilizar.");
       return;
     }
     if (!window.confirm("Confirmar esta escolha? A outra versão será arquivada localmente.")) return;
@@ -642,7 +687,29 @@
           remote.deleted !== conflict.remote.deleted) {
         throw new Error("A versão na nuvem mudou. Sincronize novamente antes de escolher.");
       }
-      await accountStore.putFiles(owner, remote.files);
+      const remoteMap = new Map();
+      const selectedMap = new Map();
+      const staged = new Map();
+      for (const [key, file] of remote.files) {
+        const localFile = await accountStore.readFile(owner, key);
+        if (localFile && !await window.EntrelinhasSyncEngine.sameFile(localFile, file)) {
+          const selection = fileChoices.get(key)?.value;
+          if (!selection) throw new Error("Os anexos mudaram. Sincronize novamente antes de escolher.");
+          const remoteKey = `file-${crypto.randomUUID()}`;
+          const selectedKey = `file-${crypto.randomUUID()}`;
+          remoteMap.set(key, remoteKey);
+          selectedMap.set(key, selectedKey);
+          staged.set(remoteKey, file);
+          staged.set(selectedKey, selection === "local" ? localFile : file);
+        } else {
+          staged.set(key, file);
+        }
+      }
+      if ([...fileChoices.keys()].some((key) => !remoteMap.has(key))) {
+        throw new Error("Os anexos mudaram. Sincronize novamente antes de escolher.");
+      }
+      const remoteBoard = window.EntrelinhasAccountBackup.remap(remote.board, remoteMap);
+      await accountStore.putFiles(owner, staged);
       if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
       const result = await accountStore.update(owner, accountVersion, (data) => {
         if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
@@ -651,11 +718,11 @@
         if (window.EntrelinhasImportCore.canonical(local) !== window.EntrelinhasImportCore.canonical(visible)) {
           throw new Error("O quadro local mudou. Tente novamente.");
         }
-        data.archive.push({ board: remote.board, revision: remote.revision, reason: "versão remota antes da resolução" });
+        data.archive.push({ board: remoteBoard, revision: remote.revision, reason: "versão remota antes da resolução" });
         if (local) data.archive.push({ board: local, reason: "versão local antes da resolução" });
         if (choice !== "local") {
           data.boards = data.boards.filter((board) => board.id !== conflict.id);
-          if (!remote.deleted) data.boards.push(remote.board);
+          if (!remote.deleted) data.boards.push(window.EntrelinhasAccountBackup.remap(remote.board, selectedMap));
           if (choice === "both" && local) {
             const copy = structuredClone(local);
             copy.id = id();
@@ -663,8 +730,12 @@
             data.boards.push(copy);
           }
         }
+        if (choice === "local" && local && selectedMap.size) {
+          data.boards = data.boards.map((board) => board.id === conflict.id
+            ? window.EntrelinhasAccountBackup.remap(board, selectedMap) : board);
+        }
         data.baseline = data.baseline.filter((entry) => entry.board.id !== conflict.id);
-        data.baseline.push({ board: remote.board, revision: remote.revision, deleted: remote.deleted });
+        data.baseline.push({ board: remote.board, backupBoard: remoteBoard, revision: remote.revision, deleted: remote.deleted });
         if (!data.boards.some((board) => board.id === data.activeBoardId)) data.activeBoardId = data.boards[0]?.id || null;
         return data;
       });
@@ -677,7 +748,10 @@
       scheduleSync(0);
     } catch (error) {
       console.error("Falha ao resolver conflito:", error);
-      if (account === owner && epoch !== accountEpoch) accountBlocked = true;
+      if (account === owner && epoch !== accountEpoch) {
+        accountBlocked = true;
+        renderRecovery(accountJournals(owner).map((entry) => entry.key));
+      }
       status.textContent = `Conflito não resolvido: ${error.message}`;
       status.parentElement.classList.add("error");
     } finally {
@@ -685,6 +759,133 @@
       if (account && !accountBlocked) scheduleSync(1500);
     }
   }
+
+  function accountJournals(owner) {
+    const prefix = `entrelinhas-draft-v1:${owner}:`;
+    return Object.keys(localStorage).filter((key) => key.startsWith(prefix)).sort()
+      .map((key) => ({ key, raw: localStorage.getItem(key) }));
+  }
+
+  async function exportAccountBackup() {
+    const owner = account;
+    if (!owner || syncing || resolvingConflict) {
+      showToast("Aguarde a sincronização antes de exportar.");
+      return;
+    }
+    const epoch = accountEpoch;
+    const message = $("#account-backup-status");
+    resolvingConflict = true;
+    try {
+      await accountQueue;
+      const { client, userId } = await window.entrelinhasCloudAuth.requireSession();
+      if (userId !== owner || account !== owner) throw new Error("A conta conectada mudou.");
+      message.textContent = "Lendo arquivos locais e versões da nuvem…";
+      const journals = accountJournals(owner);
+      const snapshot = await accountStore.snapshot(owner);
+      const core = window.EntrelinhasImportCore;
+      const listed = await core.listBoards(client, owner);
+      const remote = [];
+      for (const row of listed) {
+        const session = await window.entrelinhasCloudAuth.requireSession();
+        if (session.userId !== owner || account !== owner) throw new Error("A conta conectada mudou.");
+        const item = await core.loadBoard(client, owner, row.id);
+        if (item.revision !== row.revision) throw new Error("Um quadro remoto mudou durante o backup.");
+        remote.push({ ...item, remoteId: row.id });
+      }
+      const backup = await window.EntrelinhasAccountBackup.create(owner, snapshot, journals.map((entry) => JSON.parse(entry.raw)), remote);
+      const after = await core.listBoards(client, owner);
+      const revisions = (rows) => rows.map((row) => [row.id, row.revision]).sort((a, b) => a[0].localeCompare(b[0]));
+      const session = await window.entrelinhasCloudAuth.requireSession();
+      const current = await accountStore.snapshot(owner);
+      let filesUnchanged = current.files.size === snapshot.files.size;
+      if (filesUnchanged) {
+        for (const [key, file] of snapshot.files) {
+          if (!await window.EntrelinhasSyncEngine.sameFile(file, current.files.get(key))) {
+            filesUnchanged = false;
+            break;
+          }
+        }
+      }
+      if (session.userId !== owner || account !== owner || epoch !== accountEpoch ||
+          current.record.version !== snapshot.record.version || !filesUnchanged ||
+          core.canonical(journals) !== core.canonical(accountJournals(owner)) ||
+          core.canonical(revisions(listed)) !== core.canonical(revisions(after))) {
+        throw new Error("Os dados mudaram durante o backup. Tente novamente.");
+      }
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `entrelinhas-conta-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      message.textContent = "Download iniciado. Confira e guarde o backup em local seguro.";
+    } catch (error) {
+      console.error("Falha ao exportar backup da conta:", error);
+      message.textContent = `Backup não concluído: ${error.message}`;
+    } finally {
+      resolvingConflict = false;
+      if (account && !accountBlocked) scheduleSync(1500);
+    }
+  }
+
+  async function restoreAccountBackup(file) {
+    const owner = account;
+    if (!owner || syncing || resolvingConflict || accountBlocked) {
+      showToast("Aguarde a sincronização e resolva rascunhos pendentes antes de restaurar.");
+      return;
+    }
+    if (!window.confirm("Restaurar o backup desta conta como cópias? Os dados existentes não serão substituídos.")) return;
+    const epoch = accountEpoch;
+    const message = $("#account-backup-status");
+    resolvingConflict = true;
+    try {
+      await accountQueue;
+      message.textContent = "Verificando a integridade do backup…";
+      const backup = JSON.parse(await file.text());
+      const restored = await window.EntrelinhasAccountBackup.prepareRestore(owner, backup, () => `id-${crypto.randomUUID()}`);
+      const session = await window.entrelinhasCloudAuth.requireSession();
+      if (session.userId !== owner || account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o editor mudou.");
+      await accountStore.putFiles(owner, restored.files);
+      if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o editor mudou.");
+      const record = await accountStore.update(owner, accountVersion, (data) => {
+        if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o editor mudou.");
+        const ids = new Set(data.boards.map((board) => board.id));
+        for (const board of restored.boards) {
+          if (ids.has(board.id)) throw new Error("Identificador de quadro duplicado.");
+          ids.add(board.id);
+        }
+        data.boards.push(...restored.boards);
+        data.archive.push(...restored.archive);
+        if (!data.activeBoardId) data.activeBoardId = data.boards[0]?.id || null;
+        return data;
+      });
+      if (!record) throw new Error("A conta mudou em outra aba. Tente novamente.");
+      if (account !== owner || epoch !== accountEpoch) {
+        if (account === owner) {
+          accountBlocked = true;
+          renderRecovery(accountJournals(owner).map((entry) => entry.key));
+        }
+        throw new Error("O editor mudou; o rascunho foi preservado para recuperação.");
+      }
+      accountVersion = record.version;
+      applyAccountState(record);
+      message.textContent = `${restored.boards.length} quadro(s) restaurados como cópias; versões adicionais estão no arquivo local.`;
+    } catch (error) {
+      console.error("Falha ao restaurar backup da conta:", error);
+      message.textContent = `Restauração interrompida: ${error.message}`;
+    } finally {
+      resolvingConflict = false;
+      if (account && !accountBlocked) scheduleSync(1500);
+    }
+  }
+
+  $("#account-backup-export").addEventListener("click", exportAccountBackup);
+  $("#account-backup-restore").addEventListener("click", () => $("#account-backup-input").click());
+  $("#account-backup-input").addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (file) restoreAccountBackup(file);
+  });
 
   const currentBoard = () => state.boards.find((board) => board.id === state.activeBoardId);
   const currentCanvas = () => folderPath.reduce((canvas, folderId) => canvas.cards.find((card) => card.id === folderId && card.type === "folder"), currentBoard());

@@ -18,7 +18,7 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - Crie outros quadros na barra lateral. O botão de download exporta o quadro atual em JSON.
 - Clique em **entrelinhas** para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
 - Na página inicial, use **Excluir quadro** e confirme para removê-lo. Sem login, a exclusão do quadro não pode ser desfeita; faça um backup antes. Com login, uma versão é arquivada localmente e pode ser restaurada como cópia. O backup dos dados anteriores ao login inclui capas e anexos do IndexedDB antigo, mesmo sem referência.
-- **Backup local anterior** baixa um JSON com os quadros anteriores ao login e os arquivos do IndexedDB antigo, inclusive os sem referência. Ele não inclui os dados armazenados por conta. Não há restauração automática desse JSON.
+- **Backup local anterior** baixa um JSON com os quadros anteriores ao login e os arquivos do IndexedDB antigo, inclusive os sem referência. Ele não inclui os dados armazenados por conta. Não há restauração automática desse JSON; para a conta conectada, use as opções abaixo.
 
 O backup contém dados privados em texto e anexos codificados em base64; guarde-o em local seguro. Arquivos grandes podem exigir bastante memória e espaço. Imagens que existem apenas como links externos permanecem como links; o conteúdo externo não é baixado. O backup preserva o texto original de `entrelinhas-boards-v1`, bem como identificadores, tipos, nomes, tamanhos, datas e hashes dos arquivos locais.
 
@@ -100,8 +100,44 @@ sincronizar alterações após edição, reconexão e consulta periódica. A exc
 é lógica e preserva documento e arquivos. Na página inicial, conflitos podem
 ser comparados em JSON e resolvidos com a versão local, a remota ou ambas.
 Versões anteriores são arquivadas no IndexedDB da conta e podem ser
-restauradas como cópias na página inicial. Conflitos em que o mesmo identificador de arquivo
-tem conteúdos diferentes não podem ser resolvidos automaticamente.
+restauradas como cópias na página inicial. Quando um identificador de anexo
+representa conteúdos diferentes, baixe as duas versões para compará-las e
+selecione a versão a usar em cada anexo antes de escolher o quadro. As duas
+versões dos arquivos são preservadas localmente com identificadores distintos;
+a versão não escolhida permanece vinculada ao quadro arquivado.
+
+## Backup da conta Google
+
+Na página inicial, com a conta conectada, **Exportar backup da conta** reúne
+quadros locais, bases de revisão, versões arquivadas, rascunhos pendentes,
+todos os arquivos locais da conta (inclusive sem referência) e versões atuais
+dos quadros remotos com seus anexos. Quadros e anexos incluem posições,
+formatação, pastas, conexões e metadados. A exportação consulta o Supabase e
+verifica revisões, referências e hashes SHA-256; se a conta mudar, a rede falhar,
+um arquivo estiver ausente ou os dados mudarem durante a leitura, ela é
+interrompida. Feche outras abas e evite editar durante a operação.
+
+**Restaurar backup como cópias** verifica a integridade e exige a mesma conta.
+Quadros ativos recebem novos identificadores e aparecem no editor; versões
+arquivadas, bases e rascunhos ficam em **Versões arquivadas** e podem ser
+restaurados como novos quadros. Uma versão encontrada somente na nuvem também
+aparece como cópia; uma versão remota alternativa fica arquivada. As cópias
+ativas serão sincronizadas; as versões arquivadas permanecem apenas neste
+navegador até serem restauradas como quadro. A restauração não aplica revisões
+antigas, não substitui arquivos ou quadros existentes e não altera a conta de
+origem. Uma interrupção pode deixar arquivos sem referência no armazenamento
+local, sem remover os dados anteriores.
+
+O backup contém dados privados em texto e anexos em base64; não é criptografado.
+Guarde-o em local seguro e não restaure arquivos de origem desconhecida: hashes
+detectam alterações acidentais, mas não autenticam o arquivo. JSON e base64
+podem exigir muita memória e espaço. Links externos continuam como links.
+O backup não inclui o histórico de revisões mantido exclusivamente no servidor,
+objetos do Storage sem referência nos quadros atuais, dados ainda não enviados
+por outros dispositivos nem os dados locais anteriores ao login. A leitura de
+vários quadros não é uma transação global no Supabase; alterações remotas após
+a última verificação não entram no arquivo. Para dados antigos deste navegador,
+baixe separadamente **Backup local anterior**.
 
 Os dados da conta ficam em IndexedDB, com rascunhos temporários em localStorage.
 Se uma edição ocorrer durante uma sincronização ou houver conflito entre abas,

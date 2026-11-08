@@ -36,6 +36,31 @@ window.runAccountStoreTests = async function () {
     assert(await (await store.readFile(a, "image")).text() === "primeiro", "Arquivo original foi substituído.");
     checks.push("anexos imutáveis e reversão transacional");
 
+    const snapshot = await store.snapshot(a);
+    assert(snapshot.files.size === 1 && await snapshot.files.get("image").text() === "primeiro",
+      "Retrato de backup misturou contas ou omitiu anexos.");
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(name);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("files", "readwrite");
+      const objectStore = tx.objectStore("files");
+      const request = objectStore.get([a, "image"]);
+      request.onsuccess = () => { request.result.hash = "corrompido"; objectStore.put(request.result, [a, "image"]); };
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    let corrupted = false;
+    try { await store.snapshot(a); } catch (error) {
+      if (!error.message.includes("integridade")) throw error;
+      corrupted = true;
+    }
+    assert(corrupted, "Backup aceitou metadados de integridade corrompidos.");
+    checks.push("backup isolado e integridade de anexos");
+
     const beforeDelete = await store.read(a);
     const afterDelete = await adapter.saveDraft(a, beforeDelete.version, { boards: [], activeBoardId: null, theme: "light" });
     assert(afterDelete.archive.length === 1 && afterDelete.archive[0].board.id === board.id, "Quadro excluído não foi arquivado.");
