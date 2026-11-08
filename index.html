@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f4f7">
   <title>archivum — nem tudo que foi ocultado deveria ser esquecido</title>
-  <link rel="stylesheet" href="style.css?v=2026-11-08-opacidade-1">
+  <link rel="stylesheet" href="style.css?v=2026-11-08-tela-cheia-1">
 </head>
 <body>
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -38,6 +38,7 @@
 
   <div class="app">
     <aside class="sidebar">
+      <button id="mobile-controls-close" type="button" aria-label="Ocultar menus">×</button>
       <a class="brand" href="#" id="home-link" aria-label="Archivum, início">
         <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
         <span>archivum<span class="brand-dot">.</span></span>
@@ -113,6 +114,7 @@
       <div class="canvas-shell" id="canvas-shell">
         <div class="canvas-pattern"></div>
         <div class="canvas-hint"><svg class="icon"><use href="#i-sparkle"/></svg> UM ESPAÇO PARA CRIAR SEM LIMITES</div>
+        <button id="mobile-controls-open" type="button" aria-label="Mostrar menus" title="Mostrar menus">☰</button>
         <div class="canvas-viewport" id="viewport">
           <div class="canvas-world" id="world" data-mode="select">
             <svg id="connections" class="connections" width="3000" height="2000" aria-label="Conexões entre notas">
@@ -125,7 +127,7 @@
           </div>
         </div>
 
-        <div class="floating-toolbar" aria-label="Ferramentas do quadro">
+        <div class="floating-toolbar" aria-label="Ferramentas do quadro; deslize para ver mais no celular">
           <button class="tool active" id="select-tool" title="Selecionar e mover notas" aria-label="Selecionar"><svg class="icon"><use href="#i-cursor"/></svg></button>
           <button class="tool" id="hand-tool" title="Mover o quadro" aria-label="Mover quadro"><svg class="icon"><use href="#i-hand"/></svg></button>
           <button class="tool" id="area-tool" title="Selecionar uma área" aria-label="Selecionar uma área"><svg class="icon"><use href="#i-area"/></svg></button>
@@ -212,7 +214,7 @@
   <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-opacidade-1"></script>
+  <script src="app.js?v=2026-11-08-tela-cheia-1"></script>
   <script src="backup.js?v=2026-11-08-archivum-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>

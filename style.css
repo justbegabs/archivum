@@ -130,4 +130,31 @@ html[data-theme="dark"] .delete-board-button:hover{background:#44374c}
   html[data-theme="dark"] .mobile-identity{background:#211e26;border-color:#39333e}
   html[data-theme="dark"] .mobile-brand{color:#eee8f2}
   html[data-theme="dark"] .mobile-tagline{color:#bcb2c5}
+  .floating-toolbar .tool{width:40px;height:40px}
+  .drawing-options,.connection-options{bottom:122px}
+}
+#mobile-controls-close,#mobile-controls-open{display:none}
+@media(max-width:650px){
+  body:not(.show-home) .app{height:100vh;height:100dvh;min-height:0}
+  body:not(.show-home) .sidebar{position:fixed;inset:48px auto 0 0;width:min(220px,75vw);padding:22px 14px 130px;z-index:10;box-shadow:4px 0 18px #211b2b33;visibility:hidden;overflow-y:auto}
+  body:not(.show-home).mobile-controls-visible .sidebar{visibility:visible}
+  body:not(.show-home) .sidebar .brand>span:last-child,body:not(.show-home) .sidebar .workspace-label,body:not(.show-home) .sidebar .workspace-card,body:not(.show-home) .sidebar .section-heading span,body:not(.show-home) .sidebar .board-item span,body:not(.show-home) .sidebar .add-board{display:flex}
+  body:not(.show-home) .sidebar .section-heading{justify-content:space-between;margin:0 7px 10px}
+  body:not(.show-home) .sidebar .board-item{justify-content:flex-start}
+  body:not(.show-home) .sidebar .side-section{margin-top:30px}
+  body:not(.show-home) #mobile-controls-close{display:block;position:absolute;right:9px;top:15px;width:36px;height:36px;border:0;border-radius:6px;background:transparent;color:#80699e;font-size:24px}
+  body:not(.show-home) .main{width:100%;height:100%;position:relative}
+  body:not(.show-home) .mobile-identity{display:none}
+  body:not(.show-home) .topbar,body:not(.show-home) .board-header{position:absolute;left:0;right:0;z-index:6;visibility:hidden}
+  body:not(.show-home) .topbar{top:0}
+  body:not(.show-home) .board-header{top:48px}
+  body:not(.show-home).mobile-controls-visible .topbar,body:not(.show-home).mobile-controls-visible .board-header{visibility:visible}
+  body:not(.show-home) .canvas-shell{width:100%;height:100%;flex:1;border-top:0}
+  body:not(.show-home):not(.mobile-controls-visible) #mobile-controls-open{display:grid;place-items:center;position:absolute;top:8px;right:8px;z-index:5;width:40px;height:40px;border:1px solid #ded5e5;border-radius:8px;background:#fff;color:#69537d;font-size:20px;box-shadow:0 2px 8px #211b2b22}
+  html[data-theme="dark"] body:not(.show-home):not(.mobile-controls-visible) #mobile-controls-open{background:#29232f;border-color:#554360;color:#e3d3ee}
+  body:not(.show-home):not(.mobile-controls-visible) .floating-toolbar,body:not(.show-home):not(.mobile-controls-visible) .zoom-controls,body:not(.show-home):not(.mobile-controls-visible) .drawing-options,body:not(.show-home):not(.mobile-controls-visible) .connection-options{visibility:hidden}
+  body:not(.show-home).mobile-controls-visible .floating-toolbar,body:not(.show-home).mobile-controls-visible .zoom-controls,body:not(.show-home).mobile-controls-visible .drawing-options,body:not(.show-home).mobile-controls-visible .connection-options{z-index:11}
+  body:not(.show-home) .canvas-hint{font-size:0}
+  body:not(.show-home):not(.mobile-controls-visible) .canvas-hint:after{content:"Toque no espaço vazio para abrir os menus";font-size:10px;letter-spacing:0}
+  body:not(.show-home).mobile-controls-visible .canvas-hint{visibility:hidden}
 }

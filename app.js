@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-opacidade-1";
+  const APP_VERSION = "2026-11-08-tela-cheia-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -77,6 +77,9 @@
   const canvasTouches = new Map();
   let pinch = null;
   let viewWidth = 0;
+  const mobileCanvas = window.matchMedia("(max-width: 650px)");
+  const menuTouches = new Map();
+  let multiTouchMenuGesture = false;
   let resizeViewTimer;
   let framingCard = null;
   let appearanceCard = null;
@@ -1183,6 +1186,7 @@
   function showHome() {
     hideFormatting();
     clearConnectionSelection();
+    document.body.classList.remove("mobile-controls-visible");
     document.body.classList.add("show-home");
     $("#home").hidden = false;
     $("#breadcrumb-title").textContent = "Todos os quadros";
@@ -1196,6 +1200,7 @@
     selectedId = null;
     selectedIds.clear();
     document.body.classList.remove("show-home");
+    document.body.classList.remove("mobile-controls-visible");
     $("#home").hidden = true;
     $("#export").hidden = false;
     renderBoards();
@@ -1617,8 +1622,14 @@
     viewWidth = viewport.clientWidth;
     zoom = 1;
     pan = { x: 0, y: 0 };
-    if (viewport.clientWidth > 0 && viewport.clientWidth < 600 && currentCanvas().cards.length) {
-      fitBoard(0.2);
+    if (viewport.clientWidth > 0 && mobileCanvas.matches && currentCanvas().cards.length) {
+      const card = currentCanvas().cards.reduce((first, item) =>
+        item.x < first.x || (item.x === first.x && item.y < first.y) ? item : first);
+      const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`);
+      const width = element?.offsetWidth || card.width;
+      zoom = Math.max(0.85, Math.min(1, (viewport.clientWidth - 32) / Math.max(1, width)));
+      pan = { x: 16 - card.x * zoom, y: 40 - card.y * zoom };
+      updateTransform();
       return;
     }
     updateTransform();
@@ -1940,6 +1951,8 @@
     event.target.value = "";
   });
   $("#select-tool").addEventListener("click", () => setMode("select"));
+  $("#mobile-controls-open").addEventListener("click", () => document.body.classList.add("mobile-controls-visible"));
+  $("#mobile-controls-close").addEventListener("click", () => document.body.classList.remove("mobile-controls-visible"));
   $("#hand-tool").addEventListener("click", () => setMode("hand"));
   $("#area-tool").addEventListener("click", () => setMode("area"));
   $("#shape-tool").addEventListener("click", () => setMode("shape"));
@@ -2242,6 +2255,32 @@
     }
     renderConnections();
   }
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (!mobileCanvas.matches || event.pointerType !== "touch" || !$("#home").hidden) return;
+    menuTouches.set(event.pointerId, { x: event.clientX, y: event.clientY, target: event.target, moved: false });
+    if (menuTouches.size > 1) multiTouchMenuGesture = true;
+  }, true);
+  viewport.addEventListener("pointermove", (event) => {
+    const touch = menuTouches.get(event.pointerId);
+    if (touch && Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 8) touch.moved = true;
+  }, true);
+  function finishMenuTouch(event) {
+    const touch = menuTouches.get(event.pointerId);
+    if (!touch) return;
+    menuTouches.delete(event.pointerId);
+    const multiple = multiTouchMenuGesture;
+    if (!menuTouches.size) multiTouchMenuGesture = false;
+    if (event.type !== "pointerup" || touch.moved || multiple ||
+        !["select", "hand"].includes(mode) ||
+        touch.target.closest("[contenteditable], button, a, input, select, video, [data-connection-handle], [data-connection-endpoint], [data-connection-index]")) return;
+    const visible = document.body.classList.contains("mobile-controls-visible");
+    if (!visible || !touch.target.closest("[data-card-id]")) {
+      document.body.classList.toggle("mobile-controls-visible", !visible);
+    }
+  }
+  viewport.addEventListener("pointerup", finishMenuTouch, true);
+  viewport.addEventListener("pointercancel", finishMenuTouch, true);
 
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
@@ -2585,7 +2624,7 @@
     clearTimeout(resizeViewTimer);
     resizeViewTimer = setTimeout(() => {
       const width = viewport.clientWidth;
-      if (width > 0 && width < 600 && width !== viewWidth && currentBoard() && !interaction && !pinch && !editingText()) {
+      if (width > 0 && mobileCanvas.matches && width !== viewWidth && currentBoard() && !interaction && !pinch && !editingText()) {
         initialView();
       }
     }, 150);
