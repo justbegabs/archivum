@@ -20,6 +20,12 @@ window.runAppearanceTests = function () {
     const color = id === "shape" ? element.querySelector(".shape-image").style.color : element.style.backgroundColor;
     assert(stored(id).appearance.background === "#123456" && color === "rgb(18, 52, 86)",
       `${id}: fundo não foi aplicado e salvo.`);
+    input("appearance-opacity", "40");
+    const opacity = id === "shape" ? getComputedStyle(element.querySelector(".shape-image")).fillOpacity :
+      getComputedStyle(element).backgroundColor;
+    assert(stored(id).appearance.backgroundOpacity === 40 &&
+      opacity === (id === "shape" ? "0.4" : "rgba(18, 52, 86, 0.4)") &&
+      getComputedStyle(element).opacity === "1", `${id}: opacidade não afetou apenas o fundo.`);
     close();
   }
   open("text");
@@ -53,7 +59,7 @@ window.runAppearanceTests = function () {
     stored("note").appearance.bold === true, "Estilo da nota não foi aplicado.");
   close();
   document.querySelector("#theme-toggle").click();
-  assert(card("note").style.backgroundColor === "rgb(18, 52, 86)" &&
+  assert(card("note").style.backgroundColor === "rgba(18, 52, 86, 0.4)" &&
     card("note").querySelector(".card-title").style.color === "rgb(0, 170, 34)",
     "Tema substituiu a aparência personalizada.");
   return ["todos os fundos", "forma", "texto", "nota", "restauração", "tema", "persistência local"];

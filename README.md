@@ -1,4 +1,6 @@
-# Entrelinhas
+# Archivum
+
+*nem tudo que foi ocultado deveria ser esquecido* — DvH
 
 Um quadro visual de anotações que funciona diretamente no navegador. Abra `index.html` para começar, ou sirva a pasta com um servidor HTTP local.
 
@@ -11,8 +13,10 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - Selecione textos, notas, imagens ou vídeos e arraste a alça no canto inferior direito para redimensionar em ambas as direções. A altura de textos e notas é mínima: o conteúdo pode expandi-la para permanecer visível. Em vídeos, a imagem mantém a proporção dentro da área escolhida. Em imagens, a alça ajusta o enquadramento. Use **A−** e **A+** nos controles do item para mudar o tamanho básico de seus textos; a formatação de trechos continua disponível nos textos formatáveis.
 - Para imagens anexadas, selecione **Ajustar enquadramento** para alterar ampliação e posição com prévia. **Restaurar imagem inteira** remove os ajustes de enquadramento, sem alterar ou substituir o arquivo original. As alterações do quadro são salvas normalmente.
 - Selecione qualquer elemento e use **Aparência do elemento** para alterar seu fundo; em formas, isso altera o preenchimento. O fundo de uma imagem ou vídeo pode ficar encoberto pela própria mídia. Nos elementos com texto, também é possível ajustar fonte, cor, negrito, itálico e sublinhado para o elemento inteiro. As opções de restaurar retornam ao estilo original, inclusive ao alternar temas. Nos textos formatáveis, estilos aplicados a trechos específicos continuam tendo prioridade sobre o estilo geral.
+- Em **Aparência do elemento**, ajuste **Opacidade do fundo** de 0% (transparente) a 100% (opaco). O ajuste afeta apenas o fundo, não o texto, os anexos ou o contorno das formas. Em elementos originalmente sem fundo, o ajuste usa branco até escolher outra cor; em formas, o preenchimento original tem opacidade de 20%. **Restaurar fundo padrão** remove a cor e a opacidade personalizadas.
 - As alterações são salvas localmente ao editar. Com a conta conectada, uma pausa de um segundo inicia a sincronização mesmo com o cursor no campo; sair do campo antecipa a tentativa. A edição continua ativa enquanto você usa a barra de formatação. Alterações recebidas da nuvem que substituiriam um quadro são aplicadas depois de sair do campo.
-- Selecione a ferramenta de seta e clique em duas notas para conectá-las.
+- Selecione a ferramenta de seta e toque ou clique no ponto de origem e depois no ponto de destino, em dois elementos diferentes. Os pontos acompanham a movimentação e o redimensionamento; conexões antigas mantêm seu posicionamento automático. Para conexão pelo teclado, o centro do elemento é usado.
+- Na ferramenta de seleção, clique ou toque em uma seta para editá-la. Arraste os círculos centrais para ajustar a curva; use **Adicionar ponto** para inserir outro após o ponto selecionado (até 32) e **Remover ponto** para removê-lo. Arraste os círculos das extremidades até outro ponto do elemento ou até outro elemento; soltar fora de um elemento cancela a alteração. A origem e o destino devem estar em elementos diferentes. Use **Texto da seta** para editar a legenda e **Restaurar curva** para retornar ao traçado automático. Pelo teclado, selecione a seta com Enter e use as teclas de direção nos pontos da curva (Shift aumenta o passo). A edição das extremidades requer mouse ou toque. Texto, pontos e extremidades são salvos com o quadro.
 - Use o ícone de pasta para criar uma pasta dentro do quadro. Edite o nome, clique em **Abrir pasta** e adicione notas, imagens ou outras pastas em um espaço separado. Use **Voltar** para retornar. Excluir uma pasta apaga também seu conteúdo.
 - Use a ferramenta de mão para mover o quadro e os controles no canto inferior para ajustar a visualização.
 - Na ferramenta de seleção, arraste uma área vazia com o mouse para selecionar vários itens e arraste um deles para mover o grupo. No celular, use **Selecionar uma área** para selecionar e depois volte para **Selecionar** para mover o grupo; a ferramenta de mão continua disponível para navegar. Use a lixeira para excluir a seleção, com confirmação quando houver vários itens.
@@ -21,13 +25,15 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - No celular, o quadro é enquadrado ao abrir e ao mudar a largura da tela. Arraste uma área vazia para navegar ou use a ferramenta de mão para arrastar sobre os itens. Na ferramenta de seleção ou de mão, afaste ou aproxime dois dedos sobre o quadro para ajustar o zoom; use os botões de zoom e centralização quando preferir. Campos de texto e controles de anexos mantêm seus gestos de edição.
 - Para redimensionar proporcionalmente no celular, selecione um texto, nota, imagem ou vídeo e depois afaste ou aproxime dois dedos sobre esse mesmo item. Para ajustar o zoom do quadro, use dois dedos na área vazia ou a ferramenta de mão. A alça continua disponível para ajustes independentes de largura e altura.
 - Crie outros quadros na barra lateral. O botão de download exporta o quadro atual em JSON.
-- Clique em **entrelinhas** para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
+- Clique em **archivum** (ou no símbolo da marca no celular) para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
 - Na página inicial, use **Excluir quadro** e confirme para removê-lo. Sem login, a exclusão do quadro não pode ser desfeita; faça um backup antes. Com login, uma versão é arquivada localmente e pode ser restaurada como cópia. O backup dos dados anteriores ao login inclui capas e anexos do IndexedDB antigo, mesmo sem referência.
 - **Backup local anterior** baixa um JSON com os quadros anteriores ao login e os arquivos do IndexedDB antigo, inclusive os sem referência. Ele não inclui os dados armazenados por conta. Não há restauração automática desse JSON; para a conta conectada, use as opções abaixo.
 
 O backup contém dados privados em texto e anexos codificados em base64; guarde-o em local seguro. Arquivos grandes podem exigir bastante memória e espaço. Imagens que existem apenas como links externos permanecem como links; o conteúdo externo não é baixado. O backup preserva o texto original de `entrelinhas-boards-v1`, bem como identificadores, tipos, nomes, tamanhos, datas e hashes dos arquivos locais.
 
 Sem login, os quadros permanecem no armazenamento local antigo. Com login, o editor usa um armazenamento separado por conta e tenta sincronizá-lo com o Supabase. Limpar os dados do navegador pode apagar rascunhos ainda não enviados. Não há importação do JSON exportado. A fonte e a imagem do quadro de exemplo são carregadas da internet quando disponíveis.
+
+A mudança para Archivum é visual: os identificadores internos `entrelinhas` do armazenamento, dos formatos de backup e do Supabase permanecem inalterados para preservar a compatibilidade com os dados existentes.
 
 ## Preparação do Supabase
 

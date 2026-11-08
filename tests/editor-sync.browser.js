@@ -87,9 +87,56 @@ window.runEditorSyncTests = async function () {
     const background = document.querySelector("#appearance-background");
     background.value = "#123456";
     background.dispatchEvent(new Event("input", { bubbles: true }));
+    const opacity = document.querySelector("#appearance-opacity");
+    opacity.value = "35";
+    opacity.dispatchEvent(new Event("input", { bubbles: true }));
     document.querySelector("#appearance-close").click();
-    await wait(() => row().board.cards[0].appearance?.background === "#123456",
+    await wait(() => row().board.cards[0].appearance?.background === "#123456" &&
+      row().board.cards[0].appearance?.backgroundOpacity === 35,
       "Aparência não foi enviada à nuvem simulada.");
+    document.querySelector("#connect-tool").click();
+    const clickPoint = (id, x, y) => {
+      const element = document.querySelector(`[data-card-id="${id}"]`);
+      const rect = element.getBoundingClientRect();
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1,
+        clientX: rect.left + rect.width * x, clientY: rect.top + rect.height * y }));
+    };
+    clickPoint("image", 0.25, 0.6);
+    clickPoint("text", 0.75, 0.4);
+    await wait(() => row().board.connections.some((item) => item.from === "image" && item.to === "text" &&
+      Math.abs(item.fromPoint?.x - 0.25) < 0.02 && Math.abs(item.fromPoint?.y - 0.6) < 0.02 &&
+      Math.abs(item.toPoint?.x - 0.75) < 0.02 && Math.abs(item.toPoint?.y - 0.4) < 0.02),
+      "Conexão com pontos não foi enviada à nuvem simulada.");
+    const hit = document.querySelector('[data-connection-index="1"]');
+    hit.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerId: 1 }));
+    const connectionLabel = document.querySelector("#connection-label");
+    connectionLabel.value = "Conexão sincronizada";
+    connectionLabel.dispatchEvent(new Event("input", { bubbles: true }));
+    const handle = document.querySelector("[data-connection-handle]");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown", shiftKey: true }));
+    await wait(() => row().board.connections[1].label === "Conexão sincronizada" && row().board.connections[1].curve?.y === 10,
+      "Legenda e curva não foram enviadas à nuvem simulada.");
+    document.querySelector("#connection-add-point").click();
+    const endpoint = document.querySelector('[data-connection-endpoint="from"]');
+    const endpointRect = endpoint.getBoundingClientRect();
+    const imageRect = document.querySelector('[data-card-id="image"]').getBoundingClientRect();
+    const viewportForConnection = document.querySelector("#viewport");
+    const originalConnectionCapture = viewportForConnection.setPointerCapture;
+    try {
+      viewportForConnection.setPointerCapture = () => {};
+      const pointer = (target, type, x, y) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, button: 0, pointerId: 1, pointerType: "mouse",
+        buttons: type === "pointerup" ? 0 : 1, clientX: x, clientY: y
+      }));
+      pointer(endpoint, "pointerdown", endpointRect.x + endpointRect.width / 2, endpointRect.y + endpointRect.height / 2);
+      pointer(viewportForConnection, "pointermove", imageRect.left + imageRect.width * 0.6, imageRect.top + imageRect.height * 0.7);
+      pointer(viewportForConnection, "pointerup", imageRect.left + imageRect.width * 0.6, imageRect.top + imageRect.height * 0.7);
+    } finally { viewportForConnection.setPointerCapture = originalConnectionCapture; }
+    await wait(() => row().board.connections[1].curvePoints?.length === 2 &&
+      Math.abs(row().board.connections[1].fromPoint.x - 0.6) < 0.03 &&
+      Math.abs(row().board.connections[1].fromPoint.y - 0.7) < 0.03,
+      "Pontos ou extremidade não foram enviados à nuvem simulada.");
+    document.querySelector("#connection-close").click();
     const textCard = document.querySelector('[data-card-id="text"]');
     textCard.click();
     const viewport = document.querySelector("#viewport");

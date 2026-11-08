@@ -257,7 +257,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `entrelinhas-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      link.download = `archivum-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       if (backup.warnings.length) {

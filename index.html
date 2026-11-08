@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f7f4">
-  <title>Entrelinhas — seu espaço para pensar</title>
-  <link rel="stylesheet" href="style.css?v=2026-11-08-aparencia-1">
+  <meta name="theme-color" content="#f5f4f7">
+  <title>archivum — nem tudo que foi ocultado deveria ser esquecido</title>
+  <link rel="stylesheet" href="style.css?v=2026-11-08-opacidade-1">
 </head>
 <body>
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -38,13 +38,14 @@
 
   <div class="app">
     <aside class="sidebar">
-      <a class="brand" href="#" id="home-link" aria-label="Entrelinhas, início">
+      <a class="brand" href="#" id="home-link" aria-label="Archivum, início">
         <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
-        <span>entrelinhas<span class="brand-dot">.</span></span>
+        <span>archivum<span class="brand-dot">.</span></span>
       </a>
+      <div class="brand-caption"><span>nem tudo que foi ocultado<br>deveria ser esquecido</span><span class="brand-signature">DvH</span></div>
       <div class="workspace-label">SEU ESPAÇO <svg class="icon"><use href="#i-down"/></svg></div>
       <div class="workspace-card">
-        <div class="workspace-avatar">E</div>
+        <div class="workspace-avatar">A</div>
         <div><strong>Meu espaço</strong><small>Plano pessoal</small></div>
         <svg class="icon workspace-chevron"><use href="#i-down"/></svg>
       </div>
@@ -64,6 +65,10 @@
     </aside>
 
     <main class="main">
+      <div class="mobile-identity">
+        <div class="mobile-brand">archivum<span class="brand-dot">.</span></div>
+        <div class="mobile-caption"><span class="mobile-tagline">nem tudo que foi ocultado deveria ser esquecido</span><span class="brand-signature">DvH</span></div>
+      </div>
       <header class="topbar">
         <div class="breadcrumbs"><span>Meu espaço</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="breadcrumb-title">Meu primeiro quadro</strong></div>
         <div class="top-actions">
@@ -109,12 +114,13 @@
         <div class="canvas-pattern"></div>
         <div class="canvas-hint"><svg class="icon"><use href="#i-sparkle"/></svg> UM ESPAÇO PARA CRIAR SEM LIMITES</div>
         <div class="canvas-viewport" id="viewport">
-          <div class="canvas-world" id="world">
+          <div class="canvas-world" id="world" data-mode="select">
             <svg id="connections" class="connections" width="3000" height="2000" aria-label="Conexões entre notas">
               <defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M1 1 7 4 1 7" fill="none" stroke="#a49ba8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
               <g id="connection-lines"></g>
             </svg>
             <div id="cards"></div>
+            <svg class="connections connection-overlay" width="3000" height="2000"><g id="connection-point-lines"></g><g id="connection-controls"></g></svg>
             <div id="selection-area" class="selection-area" hidden></div>
           </div>
         </div>
@@ -144,6 +150,13 @@
           <label>Cor <input id="drawing-color" type="color" value="#8e77aa" aria-label="Cor do desenho ou forma"></label>
           <label id="brush-size-option" hidden>Espessura <input id="brush-size" type="range" min="1" max="30" value="4" aria-label="Espessura do pincel"><output id="brush-size-value">4</output></label>
           <span id="drawing-hint"></span>
+        </div>
+        <div class="connection-options" id="connection-options" hidden>
+          <label>Texto da seta <input id="connection-label" type="text" maxlength="200" placeholder="Adicionar texto"></label>
+          <button type="button" id="connection-add-point">Adicionar ponto</button>
+          <button type="button" id="connection-remove-point" disabled>Remover ponto</button>
+          <button type="button" id="connection-reset">Restaurar curva</button>
+          <button type="button" id="connection-close" aria-label="Fechar edição da seta">✕</button>
         </div>
         <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <input id="document-input" type="file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.md,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp" hidden>
@@ -178,6 +191,7 @@
     <h2 id="appearance-title">Aparência do elemento</h2>
     <p>As alterações são salvas no quadro. Imagens e vídeos mantêm seus arquivos originais.</p>
     <label>Cor de fundo <input id="appearance-background" type="color" value="#ffffff"></label>
+    <label>Opacidade do fundo <input id="appearance-opacity" type="range" min="0" max="100" step="1" value="100" aria-describedby="appearance-opacity-value"><output id="appearance-opacity-value">100%</output></label>
     <button id="appearance-background-reset" type="button">Restaurar fundo padrão</button>
     <fieldset id="appearance-text-options">
       <legend>Texto do elemento</legend>
@@ -198,8 +212,8 @@
   <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-aparencia-1"></script>
-  <script src="backup.js?v=2026-11-08-diagnostico-1"></script>
+  <script src="app.js?v=2026-11-08-opacidade-1"></script>
+  <script src="backup.js?v=2026-11-08-archivum-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-auth.js?v=2026-11-08-diagnostico-1"></script>

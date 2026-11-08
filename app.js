@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-aparencia-1";
+  const APP_VERSION = "2026-11-08-opacidade-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -23,7 +23,7 @@
   const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter, window.EntrelinhasImportCore, (stage) => {
     diagnostic.stage = stage;
     diagnosticEvent(stage);
-    console.info("[Entrelinhas diagnóstico]", stage);
+    console.info("[Archivum diagnóstico]", stage);
   });
   let account = null;
   let accountVersion = 0;
@@ -69,6 +69,8 @@
   let selectedIds = new Set();
   let mode = "select";
   let connectionStart = null;
+  let selectedConnection = null;
+  let selectedCurvePoint = null;
   let zoom = 1;
   let pan = { x: 0, y: 0 };
   let interaction = null;
@@ -217,6 +219,11 @@
     button.setAttribute("aria-label", dark ? "Ativar tema claro" : "Ativar tema escuro");
     button.title = button.getAttribute("aria-label");
     button.innerHTML = icon(dark ? "sun" : "moon");
+    if (currentBoard()) {
+      for (const card of currentCanvas().cards) {
+        applyAppearance(card, cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`));
+      }
+    }
   }
 
   function hideFormatting() {
@@ -326,7 +333,7 @@
 
   function editingText() {
     const active = document.activeElement;
-    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active) || $("#image-frame-dialog").open || $("#appearance-dialog").open);
+    return Boolean(active?.isContentEditable || active === $("#connection-label") || $("#format-toolbar").contains(active) || $("#image-frame-dialog").open || $("#appearance-dialog").open);
   }
 
   document.addEventListener("pointerdown", (event) => {
@@ -338,7 +345,7 @@
   }, true);
 
   document.addEventListener("blur", (event) => {
-    if (!event.target.isContentEditable && !$("#format-toolbar").contains(event.target)) return;
+    if (!event.target.isContentEditable && event.target !== $("#connection-label") && !$("#format-toolbar").contains(event.target)) return;
     setTimeout(() => {
       const active = document.activeElement;
       if (!$("#format-toolbar").contains(active)) scheduleSync(0);
@@ -356,6 +363,7 @@
     selectedId = null;
     selectedIds.clear();
     connectionStart = null;
+    clearConnectionSelection();
     for (const url of mediaUrls.values()) URL.revokeObjectURL(url);
     mediaUrls.clear();
     updateTheme();
@@ -443,7 +451,7 @@
     } catch (error) {
       diagnostic.error = `Falha na etapa ${diagnostic.stage}. Consulte a mensagem de estado do editor.`;
       diagnosticEvent("falha na tentativa");
-      console.info("[Entrelinhas diagnóstico] falha na etapa", diagnostic.stage);
+      console.info("[Archivum diagnóstico] falha na etapa", diagnostic.stage);
       console.error("Falha na sincronização:", error);
       if (account === owner) {
         if (syncEpoch !== accountEpoch) {
@@ -679,7 +687,7 @@
         $("#sync-diagnostic-export").disabled = false;
       }
     } catch (error) {
-      console.info("[Entrelinhas diagnóstico] falha na consulta:", stage);
+      console.info("[Archivum diagnóstico] falha na consulta:", stage);
       lines.push(`Supabase: verificação interrompida em ${stage}. ${diagnosticError(error)}`);
       if (generation === sessionGeneration && account === owner) {
         diagnosticReport = {
@@ -703,7 +711,7 @@
     const url = URL.createObjectURL(new Blob([JSON.stringify(diagnosticReport, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "entrelinhas-diagnostico.json";
+    link.download = "archivum-diagnostico.json";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
@@ -1065,7 +1073,7 @@
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: "application/json" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `entrelinhas-conta-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `archivum-conta-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       message.textContent = "Download iniciado. Confira e guarde o backup em local seguro.";
@@ -1174,6 +1182,7 @@
 
   function showHome() {
     hideFormatting();
+    clearConnectionSelection();
     document.body.classList.add("show-home");
     $("#home").hidden = false;
     $("#breadcrumb-title").textContent = "Todos os quadros";
@@ -1206,7 +1215,7 @@
         ? `<button class="item-resize" data-resize-item aria-label="Redimensionar item" title="Arraste para redimensionar"></button>` : "";
       const textScale = Number.isFinite(card.textScale) ? Math.min(3, Math.max(0.5, card.textScale)) : 1;
       const minHeight = Number.isFinite(card.minHeight) && card.minHeight >= 40 && scalableText ? `;min-height:${card.minHeight}px` : "";
-      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}"${card.type === "video" && card.mediaResized === true ? " data-media-resized" : ""}${Number.isFinite(card.textScale) ? " data-text-scaled" : ""} style="left:${card.x}px;top:${card.y}px;width:${card.width}px;--text-scale:${textScale}${minHeight}${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
+      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart?.id ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}"${mode === "connect" ? ' tabindex="0" role="button" aria-label="Selecionar elemento para conexão"' : ""}${card.type === "video" && card.mediaResized === true ? " data-media-resized" : ""}${Number.isFinite(card.textScale) ? " data-text-scaled" : ""} style="left:${card.x}px;top:${card.y}px;width:${card.width}px;--text-scale:${textScale}${minHeight}${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
       if (card.type === "shape") {
         const color = /^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa";
         const shape = card.shape === "ellipse" ? `<ellipse cx="50" cy="50" rx="48" ry="48"/>` : card.shape === "triangle" ? `<polygon points="50,2 98,98 2,98"/>` : `<rect x="2" y="2" width="96" height="96" rx="2"/>`;
@@ -1265,6 +1274,14 @@
   const appearanceTextTypes = new Set(["text", "note", "sticky", "heading", "photo", "folder", "document", "video"]);
   const appearanceTextSelector = ".rich-text, .card-kicker, .card-title, .card-body, .card-meta, .folder-label, .folder-count, .attachment-kind, .attachment-name, .attachment-size, .attachment-download";
   const isAppearanceColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+  const isAppearanceOpacity = (value) => Number.isInteger(value) && value >= 0 && value <= 100;
+
+  function defaultBackgroundColor(element) {
+    const color = getComputedStyle(element).backgroundColor;
+    const components = color.match(/^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)$/);
+    if (!components || Number(components[4] ?? 1) === 0) return null;
+    return `#${components.slice(1, 4).map((value) => Number(value).toString(16).padStart(2, "0")).join("")}`;
+  }
 
   function applyAppearance(card, element) {
     if (!element) return;
@@ -1272,7 +1289,16 @@
     const background = isAppearanceColor(style.background) ? style.background : "";
     element.style.backgroundColor = card.type === "shape" ? "" : background;
     const shape = element.querySelector(".shape-image");
-    if (shape) shape.style.color = background || (/^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa");
+    if (shape) {
+      shape.style.color = background || (/^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa");
+      shape.style.fillOpacity = isAppearanceOpacity(style.backgroundOpacity) ? style.backgroundOpacity / 100 : "";
+    } else if (isAppearanceOpacity(style.backgroundOpacity)) {
+      const base = background || defaultBackgroundColor(element) || "#ffffff";
+      const red = parseInt(base.slice(1, 3), 16);
+      const green = parseInt(base.slice(3, 5), 16);
+      const blue = parseInt(base.slice(5, 7), 16);
+      element.style.backgroundColor = `rgba(${red}, ${green}, ${blue}, ${style.backgroundOpacity / 100})`;
+    }
     for (const text of element.querySelectorAll(appearanceTextSelector)) {
       text.style.fontFamily = Object.hasOwn(appearanceFonts, style.font) ? appearanceFonts[style.font] : "";
       text.style.color = isAppearanceColor(style.color) ? style.color : "";
@@ -1285,7 +1311,12 @@
   function openAppearance(card) {
     appearanceCard = { card, board: currentCanvas(), owner: account };
     const style = card.appearance || {};
-    $("#appearance-background").value = isAppearanceColor(style.background) ? style.background : "#ffffff";
+    const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`);
+    const opacity = isAppearanceOpacity(style.backgroundOpacity) ? style.backgroundOpacity : card.type === "shape" ? 20 : 100;
+    $("#appearance-background").value = isAppearanceColor(style.background) ? style.background :
+      card.type === "shape" && isAppearanceColor(card.color) ? card.color : defaultBackgroundColor(element) || "#ffffff";
+    $("#appearance-opacity").value = String(opacity);
+    $("#appearance-opacity-value").textContent = `${opacity}%`;
     $("#appearance-font").value = Object.hasOwn(appearanceFonts, style.font) ? style.font : "";
     $("#appearance-color").value = isAppearanceColor(style.color) ? style.color : "#292834";
     for (const key of ["bold", "italic", "underline"]) $(`#appearance-${key}`).checked = style[key] === true;
@@ -1319,9 +1350,22 @@
   $("#appearance-background").addEventListener("input", (event) => {
     if (isAppearanceColor(event.target.value)) changeAppearance((style) => { style.background = event.target.value; });
   });
+  $("#appearance-opacity").addEventListener("input", (event) => {
+    const value = Number(event.target.value);
+    if (!isAppearanceOpacity(value)) return;
+    changeAppearance((style) => { style.backgroundOpacity = value; });
+    $("#appearance-opacity-value").textContent = `${value}%`;
+  });
   $("#appearance-background-reset").addEventListener("click", () => {
-    changeAppearance((style) => { delete style.background; });
-    $("#appearance-background").value = "#ffffff";
+    const current = currentAppearance();
+    if (!current) return;
+    changeAppearance((style) => { delete style.background; delete style.backgroundOpacity; });
+    const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(current.card.id)}"]`);
+    $("#appearance-background").value = current.card.type === "shape" && isAppearanceColor(current.card.color) ?
+      current.card.color : defaultBackgroundColor(element) || "#ffffff";
+    const opacity = current.card.type === "shape" ? 20 : 100;
+    $("#appearance-opacity").value = String(opacity);
+    $("#appearance-opacity-value").textContent = `${opacity}%`;
   });
   $("#appearance-font").addEventListener("change", (event) => {
     const value = event.target.value;
@@ -1433,7 +1477,10 @@
 
   function renderConnections() {
     const board = currentCanvas();
-    linesElement.innerHTML = board.connections.map((connection) => {
+    const overlay = [];
+    const controls = [];
+    if (selectedConnection && !board.connections.includes(selectedConnection)) clearConnectionSelection();
+    linesElement.innerHTML = board.connections.map((connection, index) => {
       const from = board.cards.find((card) => card.id === connection.from);
       const to = board.cards.find((card) => card.id === connection.to);
       const fromEl = cardsElement.querySelector(`[data-card-id="${CSS.escape(connection.from)}"]`);
@@ -1441,30 +1488,108 @@
       if (!from || !to || !fromEl || !toEl) return "";
       const fromHeight = fromEl.offsetHeight;
       const toHeight = toEl.offsetHeight;
-      const dx = (to.x + to.width / 2) - (from.x + from.width / 2);
-      const dy = (to.y + toHeight / 2) - (from.y + fromHeight / 2);
-      let x1, y1, x2, y2, path;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        x1 = dx > 0 ? from.x + from.width : from.x;
-        x2 = dx > 0 ? to.x : to.x + to.width;
-        y1 = from.y + fromHeight / 2; y2 = to.y + toHeight / 2;
-        const bend = Math.max(45, Math.abs(x2 - x1) / 2) * Math.sign(dx);
-        path = `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
+      const validPoint = (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y) &&
+        point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1;
+      const fixedPoints = validPoint(connection.fromPoint) && validPoint(connection.toPoint);
+      let x1, y1, x2, y2, c1x, c1y, c2x, c2y;
+      if (fixedPoints) {
+        x1 = from.x + fromEl.offsetWidth * connection.fromPoint.x;
+        y1 = from.y + fromHeight * connection.fromPoint.y;
+        x2 = to.x + toEl.offsetWidth * connection.toPoint.x;
+        y2 = to.y + toHeight * connection.toPoint.y;
+        const deltaX = x2 - x1;
+        const deltaY = y2 - y1;
+        const bend = Math.max(15, Math.min(120, Math.hypot(deltaX, deltaY) / 3));
+        const angle = Math.atan2(deltaY, deltaX);
+        const ux = Math.cos(angle), uy = Math.sin(angle);
+        c1x = x1 + bend * ux; c1y = y1 + bend * uy;
+        c2x = x2 - bend * ux; c2y = y2 - bend * uy;
       } else {
-        x1 = from.x + from.width / 2; x2 = to.x + to.width / 2;
-        y1 = dy > 0 ? from.y + fromHeight : from.y;
-        y2 = dy > 0 ? to.y : to.y + toHeight;
-        const bend = Math.max(45, Math.abs(y2 - y1) / 2) * Math.sign(dy);
-        path = `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`;
+        const dx = (to.x + to.width / 2) - (from.x + from.width / 2);
+        const dy = (to.y + toHeight / 2) - (from.y + fromHeight / 2);
+        if (Math.abs(dx) > Math.abs(dy)) {
+          x1 = dx > 0 ? from.x + from.width : from.x;
+          x2 = dx > 0 ? to.x : to.x + to.width;
+          y1 = from.y + fromHeight / 2; y2 = to.y + toHeight / 2;
+          const bend = Math.max(45, Math.abs(x2 - x1) / 2) * Math.sign(dx);
+          c1x = x1 + bend; c1y = y1; c2x = x2 - bend; c2y = y2;
+        } else {
+          x1 = from.x + from.width / 2; x2 = to.x + to.width / 2;
+          y1 = dy > 0 ? from.y + fromHeight : from.y;
+          y2 = dy > 0 ? to.y : to.y + toHeight;
+          const bend = Math.max(45, Math.abs(y2 - y1) / 2) * Math.sign(dy);
+          c1x = x1; c1y = y1 + bend; c2x = x2; c2y = y2 - bend;
+        }
       }
-      return `<path class="connection-path" d="${path}"></path>`;
+      if (connection.curve && Number.isFinite(connection.curve.x) && Number.isFinite(connection.curve.y)) {
+        c1x += connection.curve.x * 4 / 3; c1y += connection.curve.y * 4 / 3;
+        c2x += connection.curve.x * 4 / 3; c2y += connection.curve.y * 4 / 3;
+      }
+      let path = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+      let middleX = (x1 + 3 * c1x + 3 * c2x + x2) / 8;
+      let middleY = (y1 + 3 * c1y + 3 * c2y + y2) / 8;
+      const points = Array.isArray(connection.curvePoints) && connection.curvePoints.every((point, i, all) =>
+        point && Number.isFinite(point.t) && point.t > 0 && point.t < 1 &&
+        Number.isFinite(point.x) && Number.isFinite(point.y) && (!i || all[i - 1].t < point.t))
+        ? connection.curvePoints : [];
+      const anchors = points.map((point) => ({
+        x: x1 + (x2 - x1) * point.t + point.x,
+        y: y1 + (y2 - y1) * point.t + point.y
+      }));
+      if (anchors.length) {
+        const nodes = [{ x: x1, y: y1 }, ...anchors, { x: x2, y: y2 }];
+        path = `M ${x1} ${y1}`;
+        for (let i = 0; i < nodes.length - 1; i++) {
+          const previous = nodes[Math.max(0, i - 1)];
+          const current = nodes[i];
+          const next = nodes[i + 1];
+          const after = nodes[Math.min(nodes.length - 1, i + 2)];
+          path += ` C ${current.x + (next.x - previous.x) / 6} ${current.y + (next.y - previous.y) / 6}, ${next.x - (after.x - current.x) / 6} ${next.y - (after.y - current.y) / 6}, ${next.x} ${next.y}`;
+        }
+        const center = anchors[Math.floor(anchors.length / 2)];
+        middleX = center.x; middleY = center.y;
+      }
+      if (fixedPoints) overlay.push(`<path class="connection-path" d="${path}"></path>`);
+      controls.push(`<path class="connection-hit" data-connection-index="${index}" d="${path}" tabindex="${mode === "select" ? "0" : "-1"}" role="button" aria-label="Editar seta"></path>`);
+      if (typeof connection.label === "string" && connection.label) {
+        controls.push(`<text class="connection-label" x="${middleX}" y="${middleY}" text-anchor="middle" dominant-baseline="middle">${escapeHTML(connection.label)}</text>`);
+      }
+      if (connection === selectedConnection) {
+        controls.push(`<circle class="connection-endpoint" data-connection-endpoint="from" cx="${x1}" cy="${y1}" r="${8 / zoom}" aria-label="Arrastar origem da seta"></circle>`);
+        controls.push(`<circle class="connection-endpoint" data-connection-endpoint="to" cx="${x2}" cy="${y2}" r="${8 / zoom}" aria-label="Arrastar destino da seta"></circle>`);
+        const handles = anchors.length ? anchors : [{ x: middleX, y: middleY }];
+        handles.forEach((point, i) => controls.push(`<circle class="connection-handle${selectedCurvePoint === i ? " point-selected" : ""}" data-connection-handle data-point-index="${anchors.length ? i : -1}" cx="${point.x}" cy="${point.y}" r="${8 / zoom}" tabindex="0" role="button" aria-label="Ajustar ponto ${i + 1} da curva com as setas do teclado ou arrastar"></circle>`));
+      }
+      return fixedPoints ? "" : `<path class="connection-path" d="${path}"></path>`;
     }).join("");
+    $("#connection-point-lines").innerHTML = overlay.join("");
+    $("#connection-controls").innerHTML = controls.join("");
   }
 
   function updateTransform() {
     world.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
     world.style.setProperty("--control-scale", 1 / zoom);
+    $("#connection-controls").querySelectorAll("[data-connection-handle], [data-connection-endpoint]").forEach((element) => element.setAttribute("r", 8 / zoom));
     $("#zoom-level").textContent = `${Math.round(zoom * 100)}%`;
+  }
+
+  function clearConnectionSelection() {
+    selectedConnection = null;
+    selectedCurvePoint = null;
+    $("#connection-options").hidden = true;
+  }
+
+  function selectConnection(connection) {
+    selectedConnection = connection;
+    selectedCurvePoint = null;
+    $("#connection-remove-point").disabled = true;
+    selectedId = null;
+    selectedIds.clear();
+    hideFormatting();
+    updateSelectionVisual();
+    $("#connection-label").value = typeof connection.label === "string" ? connection.label : "";
+    $("#connection-options").hidden = false;
+    renderConnections();
   }
 
   function fitBoard(minimumZoom = 0) {
@@ -1501,7 +1626,9 @@
 
   function setMode(nextMode) {
     hideFormatting();
+    clearConnectionSelection();
     mode = nextMode;
+    world.dataset.mode = mode;
     connectionStart = null;
     $("#select-tool").classList.toggle("active", mode === "select");
     $("#hand-tool").classList.toggle("active", mode === "hand");
@@ -1603,26 +1730,27 @@
     showToast("Itens excluídos.");
   }
 
-  function connectCard(cardId) {
+  function connectCard(cardId, point) {
     if (!connectionStart) {
-      connectionStart = cardId;
+      connectionStart = { id: cardId, point };
       selectedId = cardId;
-      renderCards();
-      showToast("Agora selecione a nota de destino.");
+      cardsElement.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`)?.classList.add("connect-source");
+      showToast("Agora escolha um ponto no elemento de destino.");
       return;
     }
-    if (connectionStart === cardId) {
-      showToast("Escolha outra nota para conectar.");
+    if (connectionStart.id === cardId) {
+      showToast("Escolha outro elemento para conectar.");
       return;
     }
     const board = currentCanvas();
-    if (board.connections.some((connection) => connection.from === connectionStart && connection.to === cardId)) {
-      showToast("Essas notas já estão conectadas.");
-    } else {
-      board.connections.push({ from: connectionStart, to: cardId });
-      save();
-      showToast("Notas conectadas!");
+    const connection = { from: connectionStart.id, to: cardId, fromPoint: connectionStart.point, toPoint: point };
+    board.connections.push(connection);
+    if (!save()) {
+      board.connections.pop();
+      showToast("Não foi possível salvar a conexão.");
+      return;
     }
+    showToast("Elementos conectados!");
     selectedId = cardId;
     setMode("select");
   }
@@ -1817,7 +1945,108 @@
   $("#shape-tool").addEventListener("click", () => setMode("shape"));
   $("#draw-tool").addEventListener("click", () => setMode("draw"));
   $("#brush-size").addEventListener("input", (event) => { $("#brush-size-value").textContent = event.target.value; });
-  $("#connect-tool").addEventListener("click", () => { setMode("connect"); showToast("Selecione a primeira nota para conectar."); });
+  $("#connect-tool").addEventListener("click", () => { setMode("connect"); showToast("Escolha um ponto no elemento de origem."); });
+  $("#connection-label").addEventListener("input", (event) => {
+    if (!selectedConnection) return;
+    selectedConnection.label = event.target.value;
+    renderConnections();
+    save();
+  });
+  $("#connection-add-point").addEventListener("click", () => {
+    if (!selectedConnection) return;
+    const previous = selectedConnection.curvePoints;
+    if (previous !== undefined && (!Array.isArray(previous) || previous.some((point, i) =>
+      !point || !Number.isFinite(point.t) || point.t <= 0 || point.t >= 1 ||
+      !Number.isFinite(point.x) || !Number.isFinite(point.y) || (i && previous[i - 1].t >= point.t)))) {
+      showToast("Não foi possível editar os pontos desta seta.");
+      return;
+    }
+    const endpoints = [...$("#connection-controls").querySelectorAll("[data-connection-endpoint]")].map((element) => ({
+      x: Number(element.getAttribute("cx")), y: Number(element.getAttribute("cy"))
+    }));
+    const handle = $("#connection-controls [data-connection-handle]");
+    if (endpoints.length !== 2 || !handle) return;
+    const points = previous?.length ? structuredClone(previous) : [{
+      t: 0.5,
+      x: Number(handle.getAttribute("cx")) - (endpoints[0].x + endpoints[1].x) / 2,
+      y: Number(handle.getAttribute("cy")) - (endpoints[0].y + endpoints[1].y) / 2
+    }];
+    if (points.length >= 32) { showToast("A seta já possui 32 pontos."); return; }
+    const after = selectedCurvePoint === null ? -1 : selectedCurvePoint;
+    const left = after < 0 ? { t: 0, x: 0, y: 0 } : points[after];
+    const right = points[after + 1] || { t: 1, x: 0, y: 0 };
+    if (!left || right.t - left.t < 0.000001) { showToast("Não há espaço para outro ponto aqui."); return; }
+    points.splice(after + 1, 0, { t: (left.t + right.t) / 2, x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 });
+    selectedConnection.curvePoints = points;
+    if (!save()) {
+      if (previous === undefined) delete selectedConnection.curvePoints;
+      else selectedConnection.curvePoints = previous;
+    } else {
+      selectedCurvePoint = after + 1;
+      $("#connection-remove-point").disabled = false;
+    }
+    renderConnections();
+  });
+  $("#connection-remove-point").addEventListener("click", () => {
+    if (!selectedConnection || selectedCurvePoint === null || !Array.isArray(selectedConnection.curvePoints)) return;
+    const previous = selectedConnection.curvePoints;
+    const points = previous.filter((_, index) => index !== selectedCurvePoint);
+    if (points.length) selectedConnection.curvePoints = points;
+    else delete selectedConnection.curvePoints;
+    if (!save()) selectedConnection.curvePoints = previous;
+    else { selectedCurvePoint = null; $("#connection-remove-point").disabled = true; }
+    renderConnections();
+  });
+  $("#connection-reset").addEventListener("click", () => {
+    if (!selectedConnection || (!selectedConnection.curve && !selectedConnection.curvePoints)) return;
+    const previous = selectedConnection.curve;
+    const previousPoints = selectedConnection.curvePoints;
+    delete selectedConnection.curve;
+    delete selectedConnection.curvePoints;
+    if (!save()) {
+      if (previous !== undefined) selectedConnection.curve = previous;
+      if (previousPoints !== undefined) selectedConnection.curvePoints = previousPoints;
+    } else { selectedCurvePoint = null; $("#connection-remove-point").disabled = true; }
+    renderConnections();
+  });
+  $("#connection-close").addEventListener("click", () => {
+    clearConnectionSelection();
+    renderConnections();
+  });
+  $("#connection-controls").addEventListener("keydown", (event) => {
+    const hit = event.target.closest("[data-connection-index]");
+    if (hit && mode === "select" && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      const connection = currentCanvas().connections[Number(hit.dataset.connectionIndex)];
+      if (connection) {
+        selectConnection(connection);
+        $("#connection-label").focus();
+      }
+      return;
+    }
+    if (!event.target.matches("[data-connection-handle]") || !selectedConnection) return;
+    const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    const index = Number(event.target.dataset.pointIndex);
+    const previous = index < 0 ? selectedConnection.curve : selectedConnection.curvePoints;
+    const curve = index < 0 ? (previous && Number.isFinite(previous.x) && Number.isFinite(previous.y) ? previous : { x: 0, y: 0 }) : previous[index];
+    if (!curve) return;
+    const step = event.shiftKey ? 10 : 1;
+    if (index < 0) selectedConnection.curve = { x: curve.x + direction[0] * step, y: curve.y + direction[1] * step };
+    else {
+      selectedCurvePoint = index;
+      $("#connection-remove-point").disabled = false;
+      selectedConnection.curvePoints = previous.map((point, i) => i === index ? { ...point, x: point.x + direction[0] * step, y: point.y + direction[1] * step } : point);
+    }
+    if (!save()) {
+      if (index >= 0) selectedConnection.curvePoints = previous;
+      else if (previous === undefined) delete selectedConnection.curve;
+      else selectedConnection.curve = previous;
+    }
+    renderConnections();
+    $(`#connection-controls [data-point-index="${index}"]`)?.focus();
+  });
   $("#delete-tool").addEventListener("click", deleteSelection);
   $("#zoom-in").addEventListener("click", () => { zoom = Math.min(1.75, Math.round((zoom + 0.1) * 100) / 100); updateTransform(); });
   $("#zoom-out").addEventListener("click", () => { zoom = Math.max(0.2, Math.round((zoom - 0.1) * 100) / 100); updateTransform(); });
@@ -1900,6 +2129,18 @@
     const cardElement = event.target.closest("[data-card-id]");
     if (!cardElement) return;
     const cardId = cardElement.dataset.cardId;
+    if (mode === "connect") {
+      selectedIds.clear();
+      event.preventDefault();
+      const rect = cardElement.getBoundingClientRect();
+      const hasPointer = event.detail > 0 && rect.width > 0 && rect.height > 0;
+      const clamp = (value) => Math.min(1, Math.max(0, value));
+      const point = hasPointer
+        ? { x: clamp((event.clientX - rect.left) / rect.width), y: clamp((event.clientY - rect.top) / rect.height) }
+        : { x: 0.5, y: 0.5 };
+      connectCard(cardId, point);
+      return;
+    }
     if (event.target.closest(".attachment-download")) {
       if (!event.target.closest(".attachment-download").getAttribute("href")) {
         event.preventDefault();
@@ -1925,7 +2166,7 @@
         save();
       }
       if (action.dataset.action === "delete") removeCard(cardId);
-      if (action.dataset.action === "connect") { setMode("connect"); connectCard(cardId); }
+      if (action.dataset.action === "connect") { setMode("connect"); showToast("Escolha um ponto no elemento de origem."); }
       if (action.dataset.action === "open-folder" && mode !== "connect") {
         const folder = currentCanvas().cards.find((item) => item.id === cardId && item.type === "folder");
         if (!folder) return;
@@ -1939,7 +2180,6 @@
       }
       return;
     }
-    if (mode === "connect") { selectedIds.clear(); event.preventDefault(); connectCard(cardId); return; }
     if (mode !== "select") return;
     if (selectedIds.size > 1 && selectedIds.has(cardId)) return;
     if (selectedId !== cardId) {
@@ -1948,6 +2188,11 @@
       selectedIds = new Set([cardId]);
       cardsElement.querySelectorAll(".card").forEach((el) => el.classList.toggle("selected", el.dataset.cardId === cardId));
     }
+  });
+  cardsElement.addEventListener("keydown", (event) => {
+    if (mode !== "connect" || !["Enter", " "].includes(event.key) || !event.target.matches("[data-card-id]")) return;
+    event.preventDefault();
+    connectCard(event.target.dataset.cardId, { x: 0.5, y: 0.5 });
   });
   function worldPoint(event) {
     const bounds = viewport.getBoundingClientRect();
@@ -2000,6 +2245,42 @@
 
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if (interaction && ["connection-curve", "connection-endpoint"].includes(interaction.type)) return;
+    const handle = event.target.closest("[data-connection-handle]");
+    const endpoint = event.target.closest("[data-connection-endpoint]");
+    const hit = event.target.closest("[data-connection-index]");
+    if (mode === "select" && (endpoint || handle || hit)) {
+      if (interaction || pinch) return;
+      event.preventDefault();
+      if (endpoint && selectedConnection) {
+        const ends = [...$("#connection-controls").querySelectorAll("[data-connection-endpoint]")].map((element) => ({
+          x: Number(element.getAttribute("cx")), y: Number(element.getAttribute("cy"))
+        }));
+        interaction = { type: "connection-endpoint", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+          connection: selectedConnection, side: endpoint.dataset.connectionEndpoint, ends, element: endpoint, changed: false };
+        viewport.setPointerCapture(event.pointerId);
+      } else if (handle && selectedConnection) {
+        const index = Number(handle.dataset.pointIndex);
+        const previous = index < 0 ? selectedConnection.curve : selectedConnection.curvePoints;
+        const curve = index < 0 ? previous : previous?.[index];
+        if (index >= 0 && !curve) return;
+        selectedCurvePoint = index < 0 ? null : index;
+        $("#connection-remove-point").disabled = index < 0;
+        $("#connection-controls").querySelectorAll("[data-connection-handle]").forEach((item) => item.classList.toggle("point-selected", item === handle && index >= 0));
+        interaction = { type: "connection-curve", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+          connection: selectedConnection, index, previous, x: Number.isFinite(curve?.x) ? curve.x : 0,
+          y: Number.isFinite(curve?.y) ? curve.y : 0, changed: false };
+        viewport.setPointerCapture(event.pointerId);
+      } else if (hit) {
+        const connection = currentCanvas().connections[Number(hit.dataset.connectionIndex)];
+        if (connection) selectConnection(connection);
+      }
+      return;
+    }
+    if (selectedConnection) {
+      clearConnectionSelection();
+      renderConnections();
+    }
     const touchedCard = event.target.closest("[data-card-id]");
     const selectedResizeCard = mode === "select" && selectedIds.size === 1 &&
       touchedCard?.dataset.cardId === selectedId && touchedCard.querySelector("[data-resize-item]") &&
@@ -2041,7 +2322,10 @@
     }
     if (interaction || pinch) return;
     const cardElement = event.target.closest("[data-card-id]");
-    if (mode === "connect") return;
+    if (mode === "connect") {
+      if (cardElement) event.preventDefault();
+      return;
+    }
     const start = worldPoint(event);
     if (mode === "draw" || mode === "shape" || mode === "area" || (mode === "select" && !cardElement && event.pointerType !== "touch")) {
       hideFormatting();
@@ -2122,7 +2406,24 @@
     if (!interaction || interaction.pointerId !== event.pointerId) return;
     const dx = event.clientX - interaction.startX;
     const dy = event.clientY - interaction.startY;
-    if (interaction.type === "pan") {
+    if (interaction.type === "connection-endpoint") {
+      interaction.changed = interaction.changed || Math.hypot(dx, dy) > 3;
+      if (interaction.changed) {
+        const point = worldPoint(event);
+        interaction.element.setAttribute("cx", point.x);
+        interaction.element.setAttribute("cy", point.y);
+      }
+    } else if (interaction.type === "connection-curve") {
+      if (dx || dy) {
+        if (!interaction.changed && account) accountEpoch += 1;
+        interaction.changed = true;
+        const position = { x: interaction.x + dx / zoom, y: interaction.y + dy / zoom };
+        if (interaction.index < 0) interaction.connection.curve = position;
+        else interaction.connection.curvePoints = interaction.previous.map((point, index) =>
+          index === interaction.index ? { ...point, ...position } : point);
+        renderConnections();
+      }
+    } else if (interaction.type === "pan") {
       pan = { x: interaction.x + dx, y: interaction.y + dy };
       updateTransform();
     } else if (interaction.type === "card") {
@@ -2158,7 +2459,49 @@
     $("#selection-area").hidden = true;
     if (active.preview) active.preview.remove();
     const cancelled = event.type === "pointercancel";
-    if (active.type === "card" || active.type === "resize" || active.type === "resize-item") {
+    if (active.type === "connection-endpoint") {
+      if (!cancelled && active.changed) {
+        const target = document.elementsFromPoint(event.clientX, event.clientY)
+          .map((element) => element.closest("[data-card-id]")).find(Boolean);
+        const rect = target?.getBoundingClientRect();
+        const other = active.side === "from" ? active.connection.to : active.connection.from;
+        if (target && rect.width && rect.height && target.dataset.cardId !== other &&
+            event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+          const previous = { from: active.connection.from, to: active.connection.to,
+            fromPoint: active.connection.fromPoint, toPoint: active.connection.toPoint };
+          for (const [index, side] of ["from", "to"].entries()) {
+            const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(active.connection[side])}"]`);
+            const card = currentCanvas().cards.find((item) => item.id === active.connection[side]);
+            if (element && card && element.offsetWidth && element.offsetHeight) {
+              active.connection[`${side}Point`] = {
+                x: Math.min(1, Math.max(0, (active.ends[index].x - card.x) / element.offsetWidth)),
+                y: Math.min(1, Math.max(0, (active.ends[index].y - card.y) / element.offsetHeight))
+              };
+            }
+          }
+          active.connection[active.side] = target.dataset.cardId;
+          active.connection[`${active.side}Point`] = {
+            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
+          };
+          if (!save()) {
+            active.connection.from = previous.from; active.connection.to = previous.to;
+            for (const side of ["fromPoint", "toPoint"]) {
+              if (previous[side] === undefined) delete active.connection[side];
+              else active.connection[side] = previous[side];
+            }
+          }
+        } else showToast("Solte a extremidade sobre outro elemento.");
+      }
+      renderConnections();
+    } else if (active.type === "connection-curve") {
+      if (cancelled || (active.changed && !save())) {
+        if (active.index >= 0) active.connection.curvePoints = active.previous;
+        else if (active.previous === undefined) delete active.connection.curve;
+        else active.connection.curve = active.previous;
+        renderConnections();
+      }
+    } else if (active.type === "card" || active.type === "resize" || active.type === "resize-item") {
       if (cancelled) {
         if (active.type === "card") active.items.forEach((item) => { item.card.x = item.x; item.card.y = item.y; });
         else if (active.type === "resize") { active.card.width = active.width; active.card.height = active.height; }
@@ -2249,7 +2592,12 @@
   });
   document.addEventListener("keydown", (event) => {
     if (!currentBoard() || $("#image-frame-dialog").open || $("#appearance-dialog").open) return;
-    if (event.key === "Escape") { setMode("select"); selectedId = null; selectedIds.clear(); renderCards(); }
+    if (event.key === "Escape") {
+      if (interaction && ["connection-curve", "connection-endpoint"].includes(interaction.type)) {
+        finishInteraction({ type: "pointercancel", pointerId: interaction.pointerId });
+      }
+      setMode("select"); selectedId = null; selectedIds.clear(); renderCards();
+    }
     if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedIds.size) && !event.target.isContentEditable && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) {
       event.preventDefault(); deleteSelection();
     }
