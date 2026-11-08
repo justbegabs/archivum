@@ -49,6 +49,9 @@ html[data-theme="dark"] .home{background:#19171d}html[data-theme="dark"] .home-h
 .image-frame-adjusted{overflow:hidden}
 .image-frame-adjusted .attached-image{width:100%;height:100%;max-height:none;object-fit:cover;transform-origin:center}
 .card-video[data-media-resized] .attached-video{max-height:none}
+.card-text .card-inner,.card-note .card-inner,.card-sticky .card-inner,.card-heading .card-inner,.card-photo .card-inner,.card-folder .card-inner{height:auto}
+.card-video .attached-video{object-fit:contain}
+.card-video.selected .attached-video{touch-action:none}
 .image-frame-dialog{width:min(420px,calc(100% - 32px));border:1px solid #eeebee;border-radius:12px;padding:20px;background:#fff;color:#292834;box-shadow:0 12px 40px #29283440}
 .image-frame-dialog::backdrop{background:#29283488}
 .image-frame-dialog h2{margin:0 0 8px;font-size:18px}

@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-resize-1";
+  const APP_VERSION = "2026-11-08-pinca-item-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -1202,7 +1202,8 @@
       const resize = ["text", "note", "sticky", "heading", "photo", "folder", "image", "video"].includes(card.type)
         ? `<button class="item-resize" data-resize-item aria-label="Redimensionar item" title="Arraste para redimensionar"></button>` : "";
       const textScale = Number.isFinite(card.textScale) ? Math.min(3, Math.max(0.5, card.textScale)) : 1;
-      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}"${card.type === "video" && card.mediaResized === true ? " data-media-resized" : ""}${Number.isFinite(card.textScale) ? " data-text-scaled" : ""} style="left:${card.x}px;top:${card.y}px;width:${card.width}px;--text-scale:${textScale}${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
+      const minHeight = Number.isFinite(card.minHeight) && card.minHeight >= 40 && scalableText ? `;min-height:${card.minHeight}px` : "";
+      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}"${card.type === "video" && card.mediaResized === true ? " data-media-resized" : ""}${Number.isFinite(card.textScale) ? " data-text-scaled" : ""} style="left:${card.x}px;top:${card.y}px;width:${card.width}px;--text-scale:${textScale}${minHeight}${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
       if (card.type === "shape") {
         const color = /^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa";
         const shape = card.shape === "ellipse" ? `<ellipse cx="50" cy="50" rx="48" ry="48"/>` : card.shape === "triangle" ? `<polygon points="50,2 98,98 2,98"/>` : `<rect x="2" y="2" width="96" height="96" rx="2"/>`;
@@ -1220,7 +1221,8 @@
       if (card.type === "document" || card.type === "video") {
         const name = escapeHTML(card.name);
         const download = `<a class="attachment-download" data-media-id="${escapeHTML(card.fileId)}" download="${name}" aria-label="Baixar ${name}">${icon("export")} Baixar arquivo</a>`;
-        const player = card.type === "video" ? `<video class="attached-video" controls preload="metadata" playsinline data-media-id="${escapeHTML(card.fileId)}" aria-label="Vídeo: ${name}"></video>` : "";
+        const videoHeight = Number.isFinite(card.videoHeight) && card.videoHeight >= 40 ? ` style="height:${card.videoHeight}px"` : "";
+        const player = card.type === "video" ? `<video class="attached-video" controls preload="metadata" playsinline data-media-id="${escapeHTML(card.fileId)}" aria-label="Vídeo: ${name}"${videoHeight}></video>` : "";
         return `<article ${attributes}>${controls}<div class="card-inner">${player}<div class="attachment-content"><div class="attachment-icon">${icon(card.type === "video" ? "video" : "note")}</div><div class="attachment-details"><div class="attachment-kind">${card.type === "video" ? "VÍDEO" : "DOCUMENTO"}</div><div class="attachment-name">${name}</div><div class="attachment-size">${escapeHTML(formatFileSize(card.size))}</div></div></div>${download}</div>${resize}</article>`;
       }
       if (card.type === "folder") return `<article ${attributes}>${controls}<div class="card-inner folder-content"><div class="folder-icon">${icon("folder")}</div><div class="folder-label">PASTA</div><div class="card-title" contenteditable="true" data-field="title" spellcheck="false" aria-label="Nome da pasta">${escapeHTML(card.title)}</div><div class="folder-count">${card.cards.length} ${card.cards.length === 1 ? "item" : "itens"}</div><button class="folder-open" data-action="open-folder">Abrir pasta ${icon("arrow")}</button></div>${resize}</article>`;
@@ -1866,11 +1868,64 @@
     box.style.height = `${Math.abs(end.y - start.y)}px`;
   }
 
+  function startItemResize(card, element, pointerId, x, y) {
+    return { type: "resize-item", pointerId, card, element, startX: x, startY: y, width: card.width,
+      frameHeight: card.frameHeight, initialFrameHeight: element.querySelector(".image-frame")?.offsetHeight,
+      mediaResized: card.mediaResized, minHeight: card.minHeight, initialHeight: element.offsetHeight,
+      videoHeight: card.videoHeight, initialVideoHeight: element.querySelector("video")?.offsetHeight };
+  }
+
+  function updateItemResize(active, dx, dy) {
+    if (dx === 0 && dy === 0) return;
+    active.changed = true;
+    if (account) accountEpoch += 1;
+    active.card.width = Math.max(100, Math.round(active.width + dx / zoom));
+    active.element.style.width = `${active.card.width}px`;
+    if (active.card.type === "video") {
+      active.card.mediaResized = true;
+      active.element.setAttribute("data-media-resized", "");
+      if (dy !== 0) {
+        active.card.videoHeight = Math.max(40, Math.round(active.initialVideoHeight + dy / zoom));
+        active.element.querySelector("video").style.height = `${active.card.videoHeight}px`;
+      }
+    }
+    if (active.card.type === "image") {
+      active.card.frameHeight = Math.max(40, Math.round(active.initialFrameHeight + dy / zoom));
+      applyImageFrame(active.card, active.element);
+    } else if (active.card.type !== "video" && dy !== 0) {
+      active.card.minHeight = Math.max(40, Math.round(active.initialHeight + dy / zoom));
+      active.element.style.minHeight = `${active.card.minHeight}px`;
+    }
+    renderConnections();
+  }
+
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    const touchedCard = event.target.closest("[data-card-id]");
+    const selectedResizeCard = mode === "select" && selectedIds.size === 1 &&
+      touchedCard?.dataset.cardId === selectedId && touchedCard.querySelector("[data-resize-item]") &&
+      !event.target.closest("[data-action], .attachment-download, [data-resize-item]");
     if (event.pointerType === "touch" && canvasTouches.size < 2 && ["select", "hand"].includes(mode) &&
-        !event.target.closest("[data-action], [contenteditable], video, .attachment-download, [data-resize-shape], [data-resize-item]")) {
-      canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        (selectedResizeCard || !event.target.closest("[data-action], [contenteditable], video, .attachment-download, [data-resize-shape], [data-resize-item]"))) {
+      canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY,
+        resizeId: selectedResizeCard ? touchedCard.dataset.cardId : null });
+      const entries = [...canvasTouches.entries()];
+      if (entries.length === 2 && entries[0][1].resizeId && entries[0][1].resizeId === entries[1][1].resizeId &&
+          (!interaction || interaction.type === "card")) {
+        if (interaction) finishInteraction({ type: "pointercancel", pointerId: interaction.pointerId });
+        const id = entries[0][1].resizeId;
+        const card = currentCanvas().cards.find((item) => item.id === id);
+        const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(id)}"]`);
+        if (card && element) {
+          interaction = startItemResize(card, element, entries[0][0], entries[0][1].x, entries[0][1].y);
+          const [first, second] = entries.map((entry) => entry[1]);
+          pinch = { type: "item", ids: entries.map((entry) => entry[0]),
+            distance: Math.max(1, Math.hypot(first.x - second.x, first.y - second.y)) };
+          for (const [pointerId] of entries) viewport.setPointerCapture(pointerId);
+          event.preventDefault();
+          return;
+        }
+      }
       if (canvasTouches.size === 2 && interaction && ["pan", "card"].includes(interaction.type)) {
         finishInteraction({ type: "pointercancel", pointerId: interaction.pointerId });
         const [first, second] = [...canvasTouches.values()];
@@ -1931,10 +1986,7 @@
       if (event.target.closest("[data-resize-shape]") && card.type === "shape") {
         interaction = { type: "resize", pointerId: event.pointerId, card, element: cardElement, startX: event.clientX, startY: event.clientY, width: card.width, height: card.height };
       } else if (event.target.closest("[data-resize-item]")) {
-        const frame = cardElement.querySelector(".image-frame");
-        interaction = { type: "resize-item", pointerId: event.pointerId, card, element: cardElement,
-          startX: event.clientX, startY: event.clientY, width: card.width,
-          frameHeight: card.frameHeight, initialFrameHeight: frame?.offsetHeight, mediaResized: card.mediaResized };
+        interaction = startItemResize(card, cardElement, event.pointerId, event.clientX, event.clientY);
       } else {
         const items = currentCanvas().cards.filter((item) => selectedIds.has(item.id)).map((item) => ({
           card: item, x: item.x, y: item.y, element: cardsElement.querySelector(`[data-card-id="${CSS.escape(item.id)}"]`)
@@ -1947,10 +1999,18 @@
   });
   viewport.addEventListener("pointermove", (event) => {
     if (canvasTouches.has(event.pointerId)) {
-      canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      canvasTouches.set(event.pointerId, { ...canvasTouches.get(event.pointerId), x: event.clientX, y: event.clientY });
     }
     if (pinch && canvasTouches.size >= 2 && canvasTouches.has(event.pointerId)) {
       const [first, second] = [...canvasTouches.values()];
+      if (pinch.type === "item") {
+        const factor = Math.hypot(first.x - second.x, first.y - second.y) / pinch.distance;
+        const height = interaction.card.type === "image" ? interaction.initialFrameHeight :
+          interaction.card.type === "video" ? interaction.initialVideoHeight : interaction.initialHeight;
+        updateItemResize(interaction, (factor - 1) * interaction.width * zoom, (factor - 1) * height * zoom);
+        event.preventDefault();
+        return;
+      }
       const bounds = viewport.getBoundingClientRect();
       const centerX = (first.x + second.x) / 2 - bounds.left;
       const centerY = (first.y + second.y) / 2 - bounds.top;
@@ -1983,19 +2043,7 @@
       interaction.element.style.height = `${interaction.card.height}px`;
       renderConnections();
     } else if (interaction.type === "resize-item") {
-      if (dx === 0 && dy === 0) return;
-      if (account) accountEpoch += 1;
-      interaction.card.width = Math.max(100, Math.round(interaction.width + dx / zoom));
-      interaction.element.style.width = `${interaction.card.width}px`;
-      if (interaction.card.type === "video") {
-        interaction.card.mediaResized = true;
-        interaction.element.setAttribute("data-media-resized", "");
-      }
-      if (interaction.card.type === "image") {
-        interaction.card.frameHeight = Math.max(40, Math.round(interaction.initialFrameHeight + dy / zoom));
-        applyImageFrame(interaction.card, interaction.element);
-      }
-      renderConnections();
+      updateItemResize(interaction, dx, dy);
     } else {
       interaction.end = worldPoint(event);
       if (interaction.type === "draw") {
@@ -2021,9 +2069,13 @@
           else active.card.frameHeight = active.frameHeight;
           if (active.mediaResized === undefined) delete active.card.mediaResized;
           else active.card.mediaResized = active.mediaResized;
+          if (active.minHeight === undefined) delete active.card.minHeight;
+          else active.card.minHeight = active.minHeight;
+          if (active.videoHeight === undefined) delete active.card.videoHeight;
+          else active.card.videoHeight = active.videoHeight;
         }
         renderCards();
-      } else save();
+      } else if (active.type !== "resize-item" || active.changed) save();
     } else if (!cancelled && active.type === "area") {
       const left = Math.min(active.start.x, active.end.x);
       const top = Math.min(active.start.y, active.end.y);
@@ -2067,6 +2119,13 @@
   function finishPointer(event) {
     const tracked = canvasTouches.delete(event.pointerId);
     if (pinch && tracked) {
+      if (pinch.type === "item") {
+        const ownerPointer = interaction.pointerId;
+        pinch = null;
+        canvasTouches.clear();
+        finishInteraction({ type: event.type, pointerId: ownerPointer });
+        return;
+      }
       if (canvasTouches.size < 2) {
         pinch = null;
         if (event.type !== "pointercancel" && canvasTouches.size === 1) {

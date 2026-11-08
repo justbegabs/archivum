@@ -83,6 +83,39 @@ window.runEditorSyncTests = async function () {
     await wait(() => row().board.cards[0].frameZoom === 1.5, "Enquadramento não foi enviado à nuvem simulada.");
     assert(row().board.cards[0].imageId === "image" && await row().files.get("image").text() === "imagem",
       "Enquadramento alterou o arquivo original.");
+    const textCard = document.querySelector('[data-card-id="text"]');
+    textCard.click();
+    const viewport = document.querySelector("#viewport");
+    const originalCapture = viewport.setPointerCapture;
+    try {
+      viewport.setPointerCapture = () => {};
+      const zoom = new DOMMatrix(getComputedStyle(document.querySelector("#world")).transform).a;
+      const height = textCard.offsetHeight;
+      const pointer = (target, type, y) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: "mouse",
+        button: 0, buttons: type === "pointerup" ? 0 : 1, clientX: 100, clientY: y
+      }));
+      pointer(textCard.querySelector("[data-resize-item]"), "pointerdown", 100);
+      pointer(viewport, "pointermove", 100 + 50 * zoom);
+      pointer(viewport, "pointerup", 100 + 50 * zoom);
+      await wait(() => row().board.cards[1].minHeight === height + 50,
+        "Altura do texto não foi enviada à nuvem simulada.");
+      const originalWidth = row().board.cards[1].width;
+      const touch = (target, type, id, x) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: id, pointerType: "touch",
+        button: 0, buttons: type === "pointerup" ? 0 : 1, clientX: x, clientY: 100
+      }));
+      const editable = textCard.querySelector(".rich-text");
+      touch(editable, "pointerdown", 1, 100);
+      touch(editable, "pointerdown", 2, 200);
+      touch(viewport, "pointermove", 2, 250);
+      touch(viewport, "pointerup", 2, 250);
+      touch(viewport, "pointerup", 1, 100);
+      await wait(() => row().board.cards[1].width === Math.round(originalWidth * 1.5),
+        "Redimensionamento por pinça não foi enviado à nuvem simulada.");
+    } finally {
+      viewport.setPointerCapture = originalCapture;
+    }
     setTitle("Salvo pelo editor");
     await wait(() => row().board.title === "Salvo pelo editor", "Edição não foi enviada.");
 

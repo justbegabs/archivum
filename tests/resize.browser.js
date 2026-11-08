@@ -22,6 +22,16 @@ window.runResizeTests = function (pointerType) {
     const scale = new DOMMatrix(getComputedStyle(document.querySelector("#world")).transform).a;
     drag("text", 40 * scale, 0);
     assert(stored("text").width === 240, "Largura do texto não foi persistida.");
+    const textHeight = card("text").offsetHeight;
+    drag("text", 0, 60 * scale);
+    assert(stored("text").width === 240 && stored("text").minHeight === textHeight + 60 &&
+      card("text").offsetHeight >= textHeight + 60, "Altura do texto não aumentou independentemente da largura.");
+    drag("text", 0, -30 * scale);
+    assert(stored("text").minHeight === textHeight + 30, "Altura do texto não diminuiu.");
+    const savedText = JSON.stringify(stored("text"));
+    drag("text", 0, 30 * scale, "pointercancel");
+    assert(JSON.stringify(stored("text")) === savedText && card("text").style.minHeight === `${textHeight + 30}px`,
+      "Cancelamento não restaurou a altura do texto.");
     const text = card("text").querySelector(".rich-text");
     text.innerHTML = '<b>Texto</b><font size="5">Grande</font>';
     text.dispatchEvent(new Event("input", { bubbles: true }));
@@ -33,6 +43,18 @@ window.runResizeTests = function (pointerType) {
     drag("video", 40 * scale, 0);
     assert(stored("video").width === 240 && stored("video").fileId === "file-original",
       "Vídeo ou referência ao arquivo foram alterados incorretamente.");
+    const videoHeight = card("video").querySelector("video").offsetHeight;
+    drag("video", 0, 60 * scale);
+    assert(stored("video").width === 240 && stored("video").videoHeight === videoHeight + 60 &&
+      card("video").querySelector("video").offsetHeight === videoHeight + 60,
+      "Altura do vídeo não aumentou independentemente da largura.");
+    drag("video", 0, -30 * scale);
+    assert(stored("video").videoHeight === videoHeight + 30, "Altura do vídeo não diminuiu.");
+    const savedVideo = JSON.stringify(stored("video"));
+    drag("video", 0, 30 * scale, "pointercancel");
+    assert(JSON.stringify(stored("video")) === savedVideo &&
+      card("video").querySelector("video").offsetHeight === videoHeight + 30,
+      "Cancelamento não restaurou a altura do vídeo.");
     drag("image", 40 * scale, 30 * scale);
     assert(stored("image").width === 240 && stored("image").frameHeight >= 40 &&
       stored("image").image === "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Crect width='200' height='100' fill='red'/%3E%3C/svg%3E",
