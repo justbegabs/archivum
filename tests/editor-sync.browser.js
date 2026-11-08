@@ -83,6 +83,13 @@ window.runEditorSyncTests = async function () {
     await wait(() => row().board.cards[0].frameZoom === 1.5, "Enquadramento não foi enviado à nuvem simulada.");
     assert(row().board.cards[0].imageId === "image" && await row().files.get("image").text() === "imagem",
       "Enquadramento alterou o arquivo original.");
+    imageCard.querySelector('[data-action="appearance"]').click();
+    const background = document.querySelector("#appearance-background");
+    background.value = "#123456";
+    background.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#appearance-close").click();
+    await wait(() => row().board.cards[0].appearance?.background === "#123456",
+      "Aparência não foi enviada à nuvem simulada.");
     const textCard = document.querySelector('[data-card-id="text"]');
     textCard.click();
     const viewport = document.querySelector("#viewport");

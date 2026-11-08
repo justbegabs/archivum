@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f4">
   <title>Entrelinhas — seu espaço para pensar</title>
-  <link rel="stylesheet" href="style.css?v=2026-11-08-pinca-item-1">
+  <link rel="stylesheet" href="style.css?v=2026-11-08-aparencia-1">
 </head>
 <body>
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -174,6 +174,23 @@
     <label>Posição vertical <input id="image-frame-y" type="range" min="0" max="100" step="1"></label>
     <div class="image-frame-actions"><button id="image-frame-reset" type="button">Restaurar imagem inteira</button><button id="image-frame-close" type="button">Concluir</button></div>
   </dialog>
+  <dialog id="appearance-dialog" class="image-frame-dialog" aria-labelledby="appearance-title">
+    <h2 id="appearance-title">Aparência do elemento</h2>
+    <p>As alterações são salvas no quadro. Imagens e vídeos mantêm seus arquivos originais.</p>
+    <label>Cor de fundo <input id="appearance-background" type="color" value="#ffffff"></label>
+    <button id="appearance-background-reset" type="button">Restaurar fundo padrão</button>
+    <fieldset id="appearance-text-options">
+      <legend>Texto do elemento</legend>
+      <label>Fonte <select id="appearance-font"><option value="">Padrão</option><option value="dm-sans">DM Sans</option><option value="manrope">Manrope</option><option value="arial">Arial</option><option value="georgia">Georgia</option><option value="times">Times New Roman</option><option value="courier">Courier New</option></select></label>
+      <label>Cor do texto <input id="appearance-color" type="color" value="#292834"></label>
+      <button id="appearance-color-reset" type="button">Restaurar cor padrão</button>
+      <label><input id="appearance-bold" type="checkbox"> Negrito</label>
+      <label><input id="appearance-italic" type="checkbox"> Itálico</label>
+      <label><input id="appearance-underline" type="checkbox"> Sublinhado</label>
+      <button id="appearance-text-reset" type="button">Restaurar estilo padrão</button>
+    </fieldset>
+    <div class="image-frame-actions"><button id="appearance-close" type="button">Concluir</button></div>
+  </dialog>
   <script src="sync-import-core.js?v=2026-11-08-diagnostico-1"></script>
   <script src="account-backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-reconcile.js?v=2026-11-08-diagnostico-1"></script>
@@ -181,7 +198,7 @@
   <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-pinca-item-1"></script>
+  <script src="app.js?v=2026-11-08-aparencia-1"></script>
   <script src="backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>

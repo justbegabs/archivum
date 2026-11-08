@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-pinca-item-1";
+  const APP_VERSION = "2026-11-08-aparencia-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -77,6 +77,7 @@
   let viewWidth = 0;
   let resizeViewTimer;
   let framingCard = null;
+  let appearanceCard = null;
   let toastTimer;
   let textRange = null;
   let activeTextId = null;
@@ -325,7 +326,7 @@
 
   function editingText() {
     const active = document.activeElement;
-    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active) || $("#image-frame-dialog").open);
+    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active) || $("#image-frame-dialog").open || $("#appearance-dialog").open);
   }
 
   document.addEventListener("pointerdown", (event) => {
@@ -346,7 +347,9 @@
 
   function applyAccountState(record) {
     if ($("#image-frame-dialog").open) $("#image-frame-dialog").close();
+    if ($("#appearance-dialog").open) $("#appearance-dialog").close();
     framingCard = null;
+    appearanceCard = null;
     state = { boards: structuredClone(record.boards), activeBoardId: record.activeBoardId, theme: record.theme };
     renderAccountArchive(record.archive || []);
     folderPath = [];
@@ -1198,7 +1201,7 @@
       const scalableText = ["text", "note", "sticky", "heading", "photo", "folder"].includes(card.type);
       const textControls = scalableText ? `<button data-action="text-smaller" title="Diminuir texto" aria-label="Diminuir texto">A−</button><button data-action="text-larger" title="Aumentar texto" aria-label="Aumentar texto">A+</button>` : "";
       const frameControl = card.type === "image" ? `<button data-action="frame" title="Ajustar enquadramento" aria-label="Ajustar enquadramento">▣</button>` : "";
-      const controls = `<div class="card-controls">${textControls}${frameControl}<button data-action="connect" title="Conectar item" aria-label="Conectar item">${icon("link")}</button><button data-action="delete" title="Excluir item" aria-label="Excluir item">${icon("trash")}</button></div>`;
+      const controls = `<div class="card-controls">${textControls}${frameControl}<button data-action="appearance" title="Aparência do elemento" aria-label="Aparência do elemento">◐</button><button data-action="connect" title="Conectar item" aria-label="Conectar item">${icon("link")}</button><button data-action="delete" title="Excluir item" aria-label="Excluir item">${icon("trash")}</button></div>`;
       const resize = ["text", "note", "sticky", "heading", "photo", "folder", "image", "video"].includes(card.type)
         ? `<button class="item-resize" data-resize-item aria-label="Redimensionar item" title="Arraste para redimensionar"></button>` : "";
       const textScale = Number.isFinite(card.textScale) ? Math.min(3, Math.max(0.5, card.textScale)) : 1;
@@ -1235,9 +1238,10 @@
     }).join("") || `<div class="empty-board"><strong>Uma página em branco, infinitas possibilidades.</strong><p>Adicione uma nota pela barra abaixo e comece a dar forma às suas ideias.</p></div>`;
     $("#card-count").textContent = `${board.cards.length} ${board.cards.length === 1 ? "ITEM" : "ITENS"}`;
     loadMedia(cardsElement);
-    for (const card of board.cards.filter((item) => item.type === "image")) {
+    for (const card of board.cards) {
       const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`);
-      applyImageFrame(card, element);
+      if (card.type === "image") applyImageFrame(card, element);
+      applyAppearance(card, element);
     }
     requestAnimationFrame(renderConnections);
   }
@@ -1252,6 +1256,100 @@
     if (active) setImageFrameStyle(image, card);
     else { image.style.objectPosition = ""; image.style.transform = ""; }
   }
+
+  const appearanceFonts = {
+    "dm-sans": '"DM Sans", sans-serif', manrope: 'Manrope, sans-serif',
+    arial: 'Arial, sans-serif', georgia: 'Georgia, serif',
+    times: '"Times New Roman", serif', courier: '"Courier New", monospace'
+  };
+  const appearanceTextTypes = new Set(["text", "note", "sticky", "heading", "photo", "folder", "document", "video"]);
+  const appearanceTextSelector = ".rich-text, .card-kicker, .card-title, .card-body, .card-meta, .folder-label, .folder-count, .attachment-kind, .attachment-name, .attachment-size, .attachment-download";
+  const isAppearanceColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+
+  function applyAppearance(card, element) {
+    if (!element) return;
+    const style = card.appearance || {};
+    const background = isAppearanceColor(style.background) ? style.background : "";
+    element.style.backgroundColor = card.type === "shape" ? "" : background;
+    const shape = element.querySelector(".shape-image");
+    if (shape) shape.style.color = background || (/^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa");
+    for (const text of element.querySelectorAll(appearanceTextSelector)) {
+      text.style.fontFamily = Object.hasOwn(appearanceFonts, style.font) ? appearanceFonts[style.font] : "";
+      text.style.color = isAppearanceColor(style.color) ? style.color : "";
+      text.style.fontWeight = typeof style.bold === "boolean" ? (style.bold ? "bold" : "normal") : "";
+      text.style.fontStyle = typeof style.italic === "boolean" ? (style.italic ? "italic" : "normal") : "";
+      text.style.textDecoration = typeof style.underline === "boolean" ? (style.underline ? "underline" : "none") : "";
+    }
+  }
+
+  function openAppearance(card) {
+    appearanceCard = { card, board: currentCanvas(), owner: account };
+    const style = card.appearance || {};
+    $("#appearance-background").value = isAppearanceColor(style.background) ? style.background : "#ffffff";
+    $("#appearance-font").value = Object.hasOwn(appearanceFonts, style.font) ? style.font : "";
+    $("#appearance-color").value = isAppearanceColor(style.color) ? style.color : "#292834";
+    for (const key of ["bold", "italic", "underline"]) $(`#appearance-${key}`).checked = style[key] === true;
+    $("#appearance-text-options").hidden = !appearanceTextTypes.has(card.type);
+    $("#appearance-dialog").showModal();
+  }
+
+  function currentAppearance() {
+    if (!appearanceCard || appearanceCard.owner !== account || !currentBoard() ||
+        currentCanvas() !== appearanceCard.board || !appearanceCard.board.cards.includes(appearanceCard.card)) {
+      if ($("#appearance-dialog").open) $("#appearance-dialog").close();
+      appearanceCard = null;
+      showToast("O quadro mudou. Abra novamente a aparência.");
+      return null;
+    }
+    return appearanceCard;
+  }
+
+  function changeAppearance(change) {
+    const current = currentAppearance();
+    if (!current) return;
+    const style = { ...current.card.appearance };
+    change(style);
+    if (Object.keys(style).length) current.card.appearance = style;
+    else delete current.card.appearance;
+    applyAppearance(current.card, cardsElement.querySelector(`[data-card-id="${CSS.escape(current.card.id)}"]`));
+    renderConnections();
+    save();
+  }
+
+  $("#appearance-background").addEventListener("input", (event) => {
+    if (isAppearanceColor(event.target.value)) changeAppearance((style) => { style.background = event.target.value; });
+  });
+  $("#appearance-background-reset").addEventListener("click", () => {
+    changeAppearance((style) => { delete style.background; });
+    $("#appearance-background").value = "#ffffff";
+  });
+  $("#appearance-font").addEventListener("change", (event) => {
+    const value = event.target.value;
+    if (value && !Object.hasOwn(appearanceFonts, value)) return;
+    changeAppearance((style) => { if (value) style.font = value; else delete style.font; });
+  });
+  $("#appearance-color").addEventListener("input", (event) => {
+    if (isAppearanceColor(event.target.value)) changeAppearance((style) => { style.color = event.target.value; });
+  });
+  $("#appearance-color-reset").addEventListener("click", () => {
+    changeAppearance((style) => { delete style.color; });
+    $("#appearance-color").value = "#292834";
+  });
+  for (const key of ["bold", "italic", "underline"]) {
+    $(`#appearance-${key}`).addEventListener("change", (event) => {
+      changeAppearance((style) => { style[key] = event.target.checked; });
+    });
+  }
+  $("#appearance-text-reset").addEventListener("click", () => {
+    changeAppearance((style) => {
+      for (const key of ["font", "color", "bold", "italic", "underline"]) delete style[key];
+    });
+    $("#appearance-font").value = "";
+    $("#appearance-color").value = "#292834";
+    for (const key of ["bold", "italic", "underline"]) $(`#appearance-${key}`).checked = false;
+  });
+  $("#appearance-close").addEventListener("click", () => $("#appearance-dialog").close());
+  $("#appearance-dialog").addEventListener("close", () => { appearanceCard = null; });
 
   function setImageFrameStyle(image, card) {
     const x = Number.isFinite(card.frameX) ? Math.min(100, Math.max(0, card.frameX)) : 50;
@@ -1815,6 +1913,7 @@
       event.stopPropagation();
       const card = currentCanvas().cards.find((item) => item.id === cardId);
       if (!card) return;
+      if (action.dataset.action === "appearance") openAppearance(card);
       if (action.dataset.action === "frame" && card.type === "image") openImageFrame(card, cardElement);
       if (action.dataset.action === "text-smaller" || action.dataset.action === "text-larger") {
         const scale = Number.isFinite(card.textScale) ? card.textScale : 1;
@@ -2149,7 +2248,7 @@
     }, 150);
   });
   document.addEventListener("keydown", (event) => {
-    if (!currentBoard() || $("#image-frame-dialog").open) return;
+    if (!currentBoard() || $("#image-frame-dialog").open || $("#appearance-dialog").open) return;
     if (event.key === "Escape") { setMode("select"); selectedId = null; selectedIds.clear(); renderCards(); }
     if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedIds.size) && !event.target.isContentEditable && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) {
       event.preventDefault(); deleteSelection();
