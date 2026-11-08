@@ -297,6 +297,21 @@
     if (account && !accountBlocked) syncTimer = setTimeout(syncAccount, delay);
   }
 
+  document.addEventListener("pointerdown", (event) => {
+    const active = document.activeElement;
+    if (event.button !== 0 || !active?.isContentEditable ||
+        active.contains(event.target) || $("#format-toolbar").contains(event.target)) return;
+    active.blur();
+  }, true);
+
+  document.addEventListener("focusout", (event) => {
+    if (!event.target.isContentEditable && !$("#format-toolbar").contains(event.target)) return;
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!active?.isContentEditable && !$("#format-toolbar").contains(active)) scheduleSync(0);
+    }, 0);
+  });
+
   function applyAccountState(record) {
     state = { boards: structuredClone(record.boards), activeBoardId: record.activeBoardId, theme: record.theme };
     renderAccountArchive(record.archive || []);
@@ -317,7 +332,7 @@
 
   async function syncAccount() {
     if (!account || syncing || resolvingConflict || accountBlocked) return;
-    if (interaction || document.activeElement?.isContentEditable) {
+    if (interaction || document.activeElement?.isContentEditable || $("#format-toolbar").contains(document.activeElement)) {
       scheduleSync(3000);
       return;
     }

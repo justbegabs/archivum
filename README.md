@@ -8,6 +8,7 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - Use o clipe para anexar documentos PDF, Word, OpenDocument, texto, planilhas ou apresentações; use o ícone de vídeo para MP4, WebM ou MOV. Cada documento ou vídeo pode ter até 100 MB, conforme o espaço disponível. Vídeos podem ser reproduzidos no quadro quando o navegador suporta seu formato e codec; todos os anexos podem ser baixados.
 - Alterne entre os temas claro e escuro pelo botão no cabeçalho; a preferência fica salva neste dispositivo.
 - Arraste as bordas de uma nota para movê-la. Clique no texto para editá-lo.
+- Para terminar a edição e iniciar a sincronização pendente, clique ou toque fora do campo; também é possível mudar de campo pelo teclado. A edição continua ativa enquanto você usa a barra de formatação.
 - Selecione a ferramenta de seta e clique em duas notas para conectá-las.
 - Use o ícone de pasta para criar uma pasta dentro do quadro. Edite o nome, clique em **Abrir pasta** e adicione notas, imagens ou outras pastas em um espaço separado. Use **Voltar** para retornar. Excluir uma pasta apaga também seu conteúdo.
 - Use a ferramenta de mão para mover o quadro e os controles no canto inferior para ajustar a visualização.
