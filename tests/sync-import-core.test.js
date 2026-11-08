@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { importBoard, saveBoard, loadBoard } = require("../sync-import-core.js");
+const { importBoard, saveBoard, loadBoard, listBoards } = require("../sync-import-core.js");
 
 const owner = "01234567-89ab-cdef-0123-456789abcdef";
 const other = "11234567-89ab-cdef-0123-456789abcdef";
@@ -72,6 +72,20 @@ test("importa, verifica e retoma sem duplicar ou modificar a origem", async () =
   assert.deepEqual(input, board);
 });
 
+test("exclusão lógica preserva quadro e arquivos, e pode ser restaurada", async () => {
+  const server = fakeServer();
+  const created = await importBoard(server.client, owner, board, files());
+  const removed = await saveBoard(server.client, owner, board, files(), created.revision, { deleted: true });
+  const remote = await loadBoard(server.client, owner, created.id);
+  assert.equal(remote.deleted, true);
+  assert.equal(remote.revision, removed.revision);
+  assert.deepEqual(remote.board, board);
+  assert.equal(await remote.files.get("image").text(), "bytes");
+  await assert.rejects(saveBoard(server.client, owner, board, files(), created.revision), /revisão/);
+  await saveBoard(server.client, owner, board, files(), removed.revision);
+  assert.equal((await loadBoard(server.client, owner, created.id)).deleted, false);
+});
+
 test("interrupção de upload não grava quadro e pode ser retomada", async () => {
   const server = fakeServer();
   server.control.failUpload = true;
@@ -135,6 +149,46 @@ test("identificadores de quadros são diferentes entre contas", async () => {
   assert.notEqual(a.id, b.id);
 });
 
+function listingClient(records, options = {}) {
+  return {
+    from(name) {
+      assert.equal(name, "entrelinhas_sync_boards");
+      const state = {};
+      const query = {
+        select() { return this; },
+        eq(_key, value) { state.owner = value; return this; },
+        order() { return this; },
+        limit(value) { state.limit = value; return this; },
+        gt(_key, value) { state.cursor = value; return this; },
+        then(resolve) {
+          if (options.error) return resolve({ error: { message: "falha" } });
+          let items = options.ignoreOwner ? records : records.filter((row) => row.owner_id === state.owner);
+          if (state.cursor) items = items.filter((row) => row.id > state.cursor);
+          resolve({ data: items.slice(0, Math.min(state.limit, options.serverLimit || state.limit)), error: null });
+        }
+      };
+      return query;
+    }
+  };
+}
+
+test("lista todos os quadros mesmo com limite menor do servidor", async () => {
+  const records = Array.from({ length: 1105 }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`,
+    owner_id: owner, revision: i
+  }));
+  const found = await listBoards(listingClient(records, { serverLimit: 120 }), owner);
+  assert.equal(found.length, 1105);
+  assert.deepEqual(found[1104], { id: records[1104].id, revision: 1104 });
+});
+
+test("lista não aceita registros de outra conta, revisões inválidas ou erros", async () => {
+  const item = { id: "00000000-0000-4000-8000-000000000001", owner_id: other, revision: 0 };
+  await assert.rejects(listBoards(listingClient([item], { ignoreOwner: true }), owner), /inválida/);
+  await assert.rejects(listBoards(listingClient([{ ...item, owner_id: owner, revision: -1 }]), owner), /inválida/);
+  await assert.rejects(listBoards(listingClient([], { error: true }), owner), /falha/);
+});
+
 test("mudança de conta antes de gravar impede gravar o quadro em outra conta", async () => {
   const server = fakeServer(other);
   await assert.rejects(importBoard(server.client, owner, board, files()), /conta incorreta/);
@@ -167,6 +221,27 @@ test("confirma atualização mesmo se a resposta da gravação se perder", async
   server.control.loseResponse = true;
   const saved = await saveBoard(server.client, owner, { ...board, title: "Novo" }, files(), 0);
   assert.equal(saved.revision, 1);
+});
+
+test("retoma uma atualização já gravada após perder a resposta e a reconexão", async () => {
+  const server = fakeServer();
+  await importBoard(server.client, owner, board, files());
+  const changed = { ...board, title: "Atualização pendente" };
+  const first = await saveBoard(server.client, owner, changed, files(), 0);
+  assert.equal(first.revision, 1);
+  const retried = await saveBoard(server.client, owner, changed, files(), 0);
+  assert.equal(retried.revision, 1);
+  assert.equal(server.control.writes, 2);
+});
+
+test("retomada não aceita documento diferente nem arquivos corrompidos", async () => {
+  const server = fakeServer();
+  await importBoard(server.client, owner, board, files());
+  await saveBoard(server.client, owner, { ...board, title: "Salvo" }, files(), 0);
+  await assert.rejects(saveBoard(server.client, owner, { ...board, title: "Diferente" }, files(), 0), /Conflito/);
+  server.objects.set([...server.objects.keys()][0], new Blob(["corrompido"]));
+  await assert.rejects(saveBoard(server.client, owner, { ...board, title: "Salvo" }, files(), 0), /integridade/);
+  assert.equal(server.control.writes, 2);
 });
 
 test("edição concorrente durante gravação não é sobrescrita", async () => {

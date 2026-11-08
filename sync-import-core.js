@@ -70,7 +70,7 @@
     }
   }
 
-  async function prepareBoard(ownerId, sourceBoard, sourceFiles) {
+  async function prepareBoard(ownerId, sourceBoard, sourceFiles, deleted = false) {
     if (!uuidPattern.test(ownerId) || !sourceBoard || typeof sourceBoard.id !== "string" ||
         typeof sourceBoard.title !== "string" || !Array.isArray(sourceBoard.cards) ||
         !Array.isArray(sourceBoard.connections) || !(sourceFiles instanceof Map)) {
@@ -92,7 +92,9 @@
         lastModified: typeof File !== "undefined" && blob instanceof File ? blob.lastModified : null
       });
     }
-    return { ownerId, id, document: { format: "entrelinhas-import-v1", board, files }, files };
+    const document = { format: "entrelinhas-import-v1", board, files };
+    if (deleted) document.deleted = true;
+    return { ownerId, id, document, files };
   }
 
   async function uploadFiles(client, files, sourceFiles) {
@@ -145,15 +147,24 @@
     return { id, revision: remote.revision, files: files.length };
   }
 
-  async function saveBoard(client, ownerId, sourceBoard, sourceFiles, expectedRevision) {
+  async function saveBoard(client, ownerId, sourceBoard, sourceFiles, expectedRevision, options = {}) {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
         expectedRevision >= Number.MAX_SAFE_INTEGER) {
       throw new Error("Revisão inválida; o quadro não foi salvo.");
     }
-    const prepared = await prepareBoard(ownerId, sourceBoard, sourceFiles);
+    if (typeof options !== "object" || options === null ||
+        (options.deleted !== undefined && typeof options.deleted !== "boolean")) {
+      throw new Error("Opções de gravação inválidas.");
+    }
+    const prepared = await prepareBoard(ownerId, sourceBoard, sourceFiles, options.deleted === true);
     const { id, document, files } = prepared;
     const expected = canonical(document);
     const previous = await readBoard(client, id);
+    if (previous && previous.owner_id === prepared.ownerId &&
+        previous.revision === expectedRevision + 1 && canonical(previous.document) === expected) {
+      for (const file of files) await verifyFile(client.storage.from(bucketName), file);
+      return { id, revision: previous.revision };
+    }
     if (!previous || previous.owner_id !== prepared.ownerId || previous.revision !== expectedRevision) {
       throw new Error("Conflito de revisão ou acesso indisponível. A edição local foi preservada.");
     }
@@ -187,7 +198,9 @@
     if (!document || document.format !== "entrelinhas-import-v1" || !document.board ||
         typeof document.board.id !== "string" || typeof document.board.title !== "string" ||
         !Array.isArray(document.board.cards) || !Array.isArray(document.board.connections) ||
-        !Array.isArray(document.files) || await boardId(ownerId, document.board.id) !== id.toLowerCase()) {
+        !Array.isArray(document.files) ||
+        (document.deleted !== undefined && document.deleted !== true) ||
+        await boardId(ownerId, document.board.id) !== id.toLowerCase()) {
       throw new Error("Documento remoto inválido.");
     }
     const expectedKeys = references(document.board);
@@ -211,8 +224,38 @@
       files.set(item.key, value);
     }
     if (files.size !== expectedKeys.size) throw new Error("O quadro remoto tem arquivos ausentes no manifesto.");
-    return { board: structuredClone(document.board), revision: remote.revision, files };
+    return { board: structuredClone(document.board), revision: remote.revision, files, deleted: document.deleted === true };
   }
 
-  return { importBoard, saveBoard, loadBoard };
+  async function listBoards(client, ownerId) {
+    if (!uuidPattern.test(ownerId)) throw new Error("Identificador de conta inválido.");
+    ownerId = ownerId.toLowerCase();
+    const result = [];
+    const seen = new Set();
+    let cursor = null;
+    for (;;) {
+      let query = client.from("entrelinhas_sync_boards")
+        .select("id,owner_id,revision")
+        .eq("owner_id", ownerId)
+        .order("id", { ascending: true })
+        .limit(500);
+      if (cursor) query = query.gt("id", cursor);
+      const { data, error } = await query;
+      if (error) throw new Error(`Não foi possível listar os quadros: ${errorMessage(error)}`);
+      if (!Array.isArray(data)) throw new Error("A lista de quadros retornada é inválida.");
+      if (!data.length) return result;
+      for (const row of data) {
+        if (!row || typeof row.id !== "string" || !uuidPattern.test(row.id) ||
+            row.owner_id !== ownerId || !Number.isSafeInteger(row.revision) || row.revision < 0 ||
+            seen.has(row.id) || (cursor && row.id <= cursor)) {
+          throw new Error("A lista de quadros retornada é inválida ou incompleta.");
+        }
+        seen.add(row.id);
+        result.push({ id: row.id, revision: row.revision });
+        cursor = row.id;
+      }
+    }
+  }
+
+  return { importBoard, saveBoard, loadBoard, listBoards, canonical, references };
 });

@@ -71,11 +71,13 @@ objetos imutáveis em um bucket privado por proprietário. A função de gravaç
 recusa uma revisão desatualizada. Ela não usa os convites do esquema legado.
 Os testes em PostgreSQL isolado usam esquemas simulados de Auth e Storage:
 verificam revisão, histórico transacional, restrições por proprietário e
-rejeição de bucket público. **Não execute esta migração ainda**: ela não foi
-validada no Supabase real e o editor ainda não abre nem sincroniza os quadros
-remotos. Antes de sua eventual aplicação, é necessário revisar todas as
-políticas existentes de `storage.objects`: um teste demonstrou que uma
-política permissiva preexistente pode conceder acesso adicional.
+rejeição de bucket público. No projeto Supabase configurado, essa estrutura foi
+aplicada após a revisão das políticas existentes de
+`storage.objects`. Uma consulta confirmou as tabelas com RLS, a função, o bucket
+privado e as duas políticas de arquivos. Isso não substitui testes reais de
+acesso entre contas: uma política permissiva adicional pode conceder acesso
+indevido. A migração cria objetos novos e não deve ser executada novamente
+no mesmo projeto. O editor ainda não abre nem sincroniza os quadros remotos.
 
 Para repetir o teste SQL isolado, instale `@electric-sql/pglite` em um diretório
 de testes separado e defina a variável `PGLITE_PACKAGE_DIR` para o caminho
@@ -89,7 +91,28 @@ arquivos referenciados após confirmação. Ele compara os dados locais,
 verifica os bytes no Storage e não sobrescreve uma cópia remota diferente.
 Arquivos sem referência continuam somente no dispositivo. Uma falha pode deixar
 objetos ou quadros parciais na nuvem; uma tentativa idêntica pode ser retomada.
-Os testes usam serviços simulados. A migração SQL e as políticas ainda não
-foram testadas em um Supabase real; **não execute a migração nem use o envio
-com seus dados até essa revisão e validação**. O botão não implementa abertura
-no outro dispositivo, sincronização de edições ou resolução de conflitos.
+Os testes de envio usam serviços simulados; o acesso com contas reais ainda
+precisa ser validado antes do envio de dados. O botão não implementa abertura no
+outro dispositivo, sincronização de edições ou resolução de conflitos.
+
+**Consultar cópias na nuvem** lista cópias já enviadas para a conta conectada e
+permite visualizar seu JSON e baixar os arquivos verificados. Essa consulta é
+somente leitura: não abre o quadro no editor, não sincroniza alterações e exige
+o esquema no Supabase. Ela não altera os dados do navegador.
+
+[sync-reconcile.js](sync-reconcile.js) prepara um plano de reconciliação entre
+a última versão comum e as versões local e remota, identificando conflitos e
+ausências remotas sem sobrescrevê-las. Esse planejamento ainda não está
+conectado ao editor, não executa operações e não ativa a sincronização.
+
+[sync-engine.js](sync-engine.js) é uma preparação não ativada que usa esse
+plano para ler e gravar revisões, verificar arquivos e interromper operações
+quando a conta ou os dados locais mudam. A exclusão lógica preserva o documento
+e os anexos na nuvem e é controlada por revisão. Os módulos
+[sync-account-store.js](sync-account-store.js) e
+[sync-account-adapter.js](sync-account-adapter.js) fornecem persistência
+transacional separada por conta, anexos imutáveis e arquivamento de quadros
+excluídos. Esses módulos ainda não estão conectados ao editor, à migração nem
+a uma interface de resolução de conflitos. Os testes usam um servidor simulado
+e também verificam o IndexedDB em um navegador local. **Não carregue esses
+módulos no site como sincronização pronta.**

@@ -28,6 +28,7 @@
     login.hidden = Boolean(user);
     logout.hidden = !user;
     label.textContent = user ? `Conectado: ${user.email || "conta Google"}` : "Não conectado";
+    window.dispatchEvent(new CustomEvent("entrelinhas-session", { detail: { userId: user?.id || null } }));
   }
 
   async function initialize() {
