@@ -39,7 +39,7 @@ Essa preparação **não integra os quadros à nuvem**: migração dos quadros l
 
 O botão **Entrar com Google** inicia a autenticação no projeto Supabase configurado; **Sair** encerra a sessão. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. A sessão usa o armazenamento do Supabase no navegador. A autenticação, por si só, **não envia nem sincroniza quadros**. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) complementa o script anterior e não é executada automaticamente; a exclusão de objetos no Storage ainda precisa ser tratada pela futura integração.
 
-Na página inicial, **Verificar dados locais** informa o número de quadros, arquivos referenciados, arquivos disponíveis e arquivos sem referência, além de alertar sobre referências ausentes. A verificação é somente leitura e não inicia a importação; a migração para o Supabase ainda não está implementada.
+Na página inicial, **Verificar dados locais** informa o número de quadros, arquivos referenciados, arquivos disponíveis e arquivos sem referência, além de alertar sobre referências ausentes. A verificação é somente leitura.
 
 ## Colaboração em tempo real
 
@@ -63,3 +63,33 @@ visualizador efetivas também no Storage. Depois, será necessário persistir
 rascunhos e alterações pendentes por usuário e quadro, comparar revisões no
 servidor, recuperar alterações perdidas na reconexão e manter versões
 recuperáveis. Nenhum desses mecanismos é ativado por este documento.
+
+Como preparação para a sincronização entre dispositivos, a migração
+[202611080002_private_sync_foundation.sql](migrations/202611080002_private_sync_foundation.sql)
+propõe tabelas separadas para quadros privados, histórico de revisões e
+objetos imutáveis em um bucket privado por proprietário. A função de gravação
+recusa uma revisão desatualizada. Ela não usa os convites do esquema legado.
+Os testes em PostgreSQL isolado usam esquemas simulados de Auth e Storage:
+verificam revisão, histórico transacional, restrições por proprietário e
+rejeição de bucket público. **Não execute esta migração ainda**: ela não foi
+validada no Supabase real e o editor ainda não abre nem sincroniza os quadros
+remotos. Antes de sua eventual aplicação, é necessário revisar todas as
+políticas existentes de `storage.objects`: um teste demonstrou que uma
+política permissiva preexistente pode conceder acesso adicional.
+
+Para repetir o teste SQL isolado, instale `@electric-sql/pglite` em um diretório
+de testes separado e defina a variável `PGLITE_PACKAGE_DIR` para o caminho
+absoluto do pacote instalado. Depois execute
+`node --test tests\sync-migration.postgres.test.js`. O teste cria um banco
+descartável em memória e não se conecta ao Supabase.
+
+O botão experimental **Enviar cópia dos quadros** usa
+[sync-import-core.js](sync-import-core.js) para enviar quadros locais e seus
+arquivos referenciados após confirmação. Ele compara os dados locais,
+verifica os bytes no Storage e não sobrescreve uma cópia remota diferente.
+Arquivos sem referência continuam somente no dispositivo. Uma falha pode deixar
+objetos ou quadros parciais na nuvem; uma tentativa idêntica pode ser retomada.
+Os testes usam serviços simulados. A migração SQL e as políticas ainda não
+foram testadas em um Supabase real; **não execute a migração nem use o envio
+com seus dados até essa revisão e validação**. O botão não implementa abertura
+no outro dispositivo, sincronização de edições ou resolução de conflitos.

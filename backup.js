@@ -91,6 +91,46 @@
     };
   }
 
+  async function captureLocalData() {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (raw === null) throw new Error("Nenhum quadro salvo foi encontrado neste navegador.");
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (error) {
+      throw new Error("Os dados locais não são um JSON válido. Faça o backup antes de prosseguir.");
+    }
+    if (!data || !Array.isArray(data.boards) || !data.boards.every((board) =>
+      board && typeof board.id === "string" && board.id && typeof board.title === "string" &&
+      Array.isArray(board.cards) && Array.isArray(board.connections)) ||
+      new Set(data.boards.map((board) => board.id)).size !== data.boards.length) {
+      throw new Error("Quadros inválidos ou com identificadores duplicados. Faça o backup antes de prosseguir.");
+    }
+    const read = await readFiles();
+    const refs = references(raw).ids;
+    const files = new Map(read.records.map((record) => [record.key, record.blob]));
+    const missing = [...refs].filter((key) => !files.has(key));
+    if (raw !== localStorage.getItem(STATE_KEY)) throw new Error("Os dados mudaram durante a leitura. Tente novamente.");
+    return { raw, boards: data.boards, files, missing, unreferenced: read.records.filter((record) => !refs.has(record.key)).length, referenced: refs.size };
+  }
+
+  window.entrelinhasLocalData = {
+    capture: captureLocalData,
+    async isUnchanged(snapshot) {
+      if (localStorage.getItem(STATE_KEY) !== snapshot.raw) return false;
+      const current = await readFiles();
+      if (current.records.length !== snapshot.files.size) return false;
+      for (const { key, blob } of current.records) {
+        const original = snapshot.files.get(key);
+        if (!original || original.size !== blob.size || original.type !== blob.type ||
+            (original instanceof File) !== (blob instanceof File) ||
+            (original instanceof File && (original.name !== blob.name || original.lastModified !== blob.lastModified)) ||
+            await fingerprint(original) !== await fingerprint(blob)) return false;
+      }
+      return localStorage.getItem(STATE_KEY) === snapshot.raw;
+    }
+  };
+
   const inspectButton = document.querySelector("#inspect-migration");
   const inspectStatus = document.querySelector("#migration-status");
   document.querySelector("#migration-backup").addEventListener("click", () => button.click());
@@ -101,7 +141,7 @@
       const result = await inspectLocalData();
       inspectStatus.textContent = `${result.boards} quadro(s), ${result.referenced} arquivo(s) referenciado(s), ${result.available} disponível(is) e ${result.unreferenced} arquivo(s) sem referência. ` +
         (result.missing.length ? `Atenção: ${result.missing.length} arquivo(s) referenciado(s) não foram encontrados. ` : "") +
-        "A importação para o Supabase ainda não está disponível. Gere e confira o backup antes de migrar.";
+        "O envio de uma cópia não ativa a sincronização. Gere e confira o backup antes de continuar.";
     } catch (error) {
       console.error("Falha ao verificar dados locais:", error);
       inspectStatus.textContent = `Não foi possível verificar os dados: ${error.message}`;

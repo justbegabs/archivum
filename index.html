@@ -83,7 +83,7 @@
           <button class="primary-button" id="home-new-board"><svg class="icon"><use href="#i-plus"/></svg> Novo quadro</button>
         </div>
         <div class="home-section-heading"><div><h2>Seus quadros</h2><p>Escolha um quadro para continuar criando.</p></div><span id="home-board-count"></span></div>
-        <div class="migration-preflight"><strong>Preparar importação para a nuvem</strong><p>Confira os dados locais e baixe um backup antes de migrar. Nenhum dado será enviado nesta etapa.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup completo</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
+        <div class="migration-preflight"><strong>Preparar importação para a nuvem</strong><p>Faça e confira um backup antes de importar. O envio é experimental: não o use até que as políticas sejam revisadas e testadas. Ele ainda não ativa a sincronização entre dispositivos.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup completo</button><button class="backup-button" type="button" id="cloud-import">Enviar cópia dos quadros</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
         <div class="home-grid" id="home-grid"></div>
         <input id="cover-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
       </section>
@@ -162,5 +162,7 @@
   <script src="app.js"></script>
   <script src="backup.js"></script>
   <script src="cloud-auth.js"></script>
+  <script src="sync-import-core.js"></script>
+  <script src="cloud-import.js"></script>
 </body>
 </html>

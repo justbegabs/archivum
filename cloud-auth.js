@@ -7,6 +7,16 @@
   const message = document.querySelector("#cloud-status");
   let client;
 
+  window.entrelinhasCloudAuth = {
+    async requireSession() {
+      if (!client) throw new Error("O login ainda não está disponível. Verifique a conexão.");
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (!data.session?.user?.id) throw new Error("Entre com sua conta Google para continuar.");
+      return { client, userId: data.session.user.id };
+    }
+  };
+
   function showError(text, error) {
     console.error(text, error);
     message.textContent = text;
