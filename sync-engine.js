@@ -22,7 +22,7 @@
   }
 
   // O adaptador deve isolar contas e gravar estado e base juntos com CAS.
-  function create(adapter, operations = core) {
+  function create(adapter, operations = core, observe = () => {}) {
     let active = false;
 
     async function checkSession(ownerId) {
@@ -37,12 +37,16 @@
       if (active) throw new Error("Uma sincronização já está em andamento.");
       active = true;
       try {
+        observe("autenticação");
         const client = await checkSession(ownerId);
+        observe("leitura local");
         const snapshot = structuredClone(await adapter.read(ownerId));
+        observe("consulta remota");
         const listed = await operations.listBoards(client, ownerId);
         const remote = [];
         for (const row of listed) {
           await checkSession(ownerId);
+          observe("leitura remota e anexos");
           const value = await operations.loadBoard(client, ownerId, row.id);
           if (value.revision !== row.revision) {
             throw new Error("Um quadro mudou durante a consulta. Tente sincronizar novamente.");
@@ -50,6 +54,7 @@
           remote.push({ ...value, remoteId: row.id });
         }
         await checkSession(ownerId);
+        observe("reconciliação");
         const actions = reconcile.plan(snapshot.baseline, snapshot.boards, remote);
         const localById = new Map(snapshot.boards.map((board) => [board.id, board]));
         const baseById = new Map(snapshot.baseline.map((entry) => [entry.board.id, entry]));
@@ -85,10 +90,12 @@
           let baseline;
           if (action === "create") {
             await checkSession(ownerId);
+            observe("envio e verificação remota");
             const result = await operations.importBoard(client, ownerId, board, localFiles);
             baseline = { board, revision: result.revision };
           } else if (action === "upload" || action === "delete-remote") {
             await checkSession(ownerId);
+            observe("envio e verificação remota");
             const result = await operations.saveBoard(client, ownerId, board || deletionBoard, localFiles, cloud.revision,
               { deleted: action === "delete-remote" });
             baseline = { board: board || deletionBoard, revision: result.revision, deleted: action === "delete-remote" };
@@ -98,9 +105,11 @@
 
           await checkSession(ownerId);
           if (action === "download" || action === "adopt" || action === "delete-local" || action === "adopt-delete") {
+            observe("armazenamento de anexos");
             await adapter.stageFiles(ownerId, cloud.files);
           }
           await checkSession(ownerId);
+          observe("aplicação local");
           const nextVersion = await adapter.commit(ownerId, version, {
             id, baseline: structuredClone(baseline),
             board: action === "download" ? structuredClone(cloud.board) : undefined,

@@ -147,3 +147,24 @@ cópias: feche as outras abas antes de usá-la. Os testes do editor usam serviç
 simulados; login, políticas, transferência de arquivos e sincronização entre
 dispositivos ainda devem ser validados no Supabase real antes de depender deles.
 Os arquivos desta alteração ainda precisam ser publicados no GitHub Pages.
+
+### Diagnóstico entre dispositivos
+
+Na página inicial, abra **Diagnóstico de sincronização** e use **Verificar agora**
+em cada dispositivo. A verificação consulta quadros e anexos sem gravar ou
+substituir dados. Compare a versão e a impressão da conta; impressões iguais
+sugerem a mesma conta, mas não substituem a verificação completa do identificador
+do Supabase. Compare os identificadores abreviados dos quadros e a revisão remota.
+A revisão comum é a última versão remota reconhecida localmente; mudanças locais
+pendentes não possuem revisão remota. Conflitos e atualizações adiadas durante
+edição são indicados separadamente. Horários e contagem de tentativas são apenas
+da sessão atual; a ausência de uma sincronização bem-sucedida não prova que nunca
+houve sincronização. A próxima tentativa pode ser adiada por edição, rede ou pelo
+navegador em segundo plano.
+
+As mensagens de diagnóstico no console mostram somente etapas, sem conteúdo ou
+tokens. A impressão da conta e identificadores abreviados aparecem apenas no
+painel local: trate-os como dados privados. A consulta verifica os anexos
+referenciados, mas não prova que uma edição específica foi enviada; compare as
+revisões antes e depois de uma alteração. Erros são classificados de forma geral,
+e falhas de rede, autorização, RLS e Storage podem exigir investigação adicional.

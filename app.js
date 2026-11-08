@@ -1,4 +1,5 @@
 (() => {
+  const APP_VERSION = "2026-11-08-diagnostico-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -13,7 +14,11 @@
       ((!syncing || syncEpoch === accountEpoch) && !editingText()))
   );
   accountAdapter.deferRemote = () => editingText();
-  const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter);
+  const diagnostic = { stage: "aguardando", attempt: null, success: null, error: null, run: 0 };
+  const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter, window.EntrelinhasImportCore, (stage) => {
+    diagnostic.stage = stage;
+    console.info("[Entrelinhas diagnóstico]", stage);
+  });
   let account = null;
   let accountVersion = 0;
   let accountEpoch = 0;
@@ -367,6 +372,9 @@
     clearTimeout(syncTimer);
     syncRequestedAt = null;
     syncing = true;
+    diagnostic.attempt = new Date().toISOString();
+    diagnostic.run += 1;
+    diagnostic.error = null;
     syncBarrier = new Promise((resolve) => { releaseSync = resolve; });
     syncEpoch = accountEpoch;
     const syncStartBoards = window.EntrelinhasImportCore.canonical(state.boards);
@@ -381,6 +389,7 @@
           throw new Error("O quadro mudou durante a sincronização. O rascunho foi preservado; recupere-o antes de continuar.");
         }
         accountVersion = record.version;
+        diagnostic.stage = "atualização da interface";
         status.textContent = navigator.onLine ? "Pendente de sincronização" : "Offline";
         return;
       }
@@ -396,16 +405,22 @@
       syncConflicts = conflicts;
       renderSyncConflicts();
       if (conflicts.length) {
+        diagnostic.stage = "conflito";
         status.textContent = `Conflito: ${conflicts.length} quadro(s)`;
         status.parentElement.classList.add("error");
       } else if (results.some((result) => result.action === "deferred")) {
+        diagnostic.stage = "atualização adiada durante edição";
         status.textContent = "Atualização da nuvem pendente";
         status.parentElement.classList.remove("error");
       } else {
+        diagnostic.stage = "concluído";
+        diagnostic.success = new Date().toISOString();
         status.textContent = "Salvo na nuvem";
         status.parentElement.classList.remove("error");
       }
     } catch (error) {
+      diagnostic.error = `Falha na etapa ${diagnostic.stage}. Consulte a mensagem de estado do editor.`;
+      console.info("[Entrelinhas diagnóstico] falha na etapa", diagnostic.stage);
       console.error("Falha na sincronização:", error);
       if (account === owner) {
         if (syncEpoch !== accountEpoch) {
@@ -449,6 +464,12 @@
     $("#sync-recovery").hidden = true;
     document.querySelector(".app").inert = true;
     account = owner;
+    diagnostic.stage = "aguardando";
+    diagnostic.attempt = null;
+    diagnostic.success = null;
+    diagnostic.error = null;
+    diagnostic.run = 0;
+    $("#sync-diagnostic").textContent = "Aguardando verificação.";
     $("#account-backup-panel").hidden = !owner;
     accountQueue = Promise.resolve();
     accountBlocked = false;
@@ -506,6 +527,86 @@
       showToast("Não foi possível carregar seus quadros salvos.");
     }
   }
+
+  async function diagnosticHash(value) {
+    if (!crypto.subtle) throw new Error("A identificação exige HTTPS ou localhost.");
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  }
+
+  function diagnosticError(error) {
+    const text = String(error?.message || "");
+    if (/jwt|auth|sessão|session|conta conectada|login/i.test(text)) return "Autenticação ou sessão indisponível.";
+    if (/row.level|permission|permissão|policy|política|403|42501/i.test(text)) return "Possível erro de permissão/RLS.";
+    if (/storage|arquivo|integridade|manifesto/i.test(text)) return "Falha em anexo, Storage ou integridade.";
+    if (/network|fetch|rede|offline/i.test(text)) return "Falha de rede ou serviço indisponível.";
+    return "Falha na consulta. Verifique a mensagem de estado do editor.";
+  }
+
+  $("#sync-diagnostic-run").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const output = $("#sync-diagnostic");
+    const owner = account;
+    const generation = sessionGeneration;
+    const lines = [
+      `Versão do aplicativo: ${APP_VERSION}`,
+      `Autenticação: ${owner ? "conta conectada" : "não conectada"}`,
+      `Rede do navegador: ${navigator.onLine ? "online" : "offline"}`,
+      `Última tentativa: ${diagnostic.attempt || "nenhuma nesta sessão"}`,
+      `Última sincronização sem pendências: ${diagnostic.success || "nenhuma nesta sessão"}`,
+      `Tentativas nesta sessão: ${diagnostic.run}`,
+      `Etapa atual/última: ${diagnostic.stage}`,
+      `Erro recente: ${diagnostic.error || "nenhum registrado nesta sessão"}`,
+      `Conflitos pendentes: ${syncConflicts.length}`,
+      `Sincronização bloqueada por rascunho: ${accountBlocked ? "sim" : "não"}`,
+      `Próxima tentativa agendada: ${syncRequestedAt ? new Date(syncRequestedAt).toISOString() : "nenhuma"}`,
+      `Quadros no editor: ${state.boards.length}`
+    ];
+    button.disabled = true;
+    output.textContent = lines.join("\n") + "\nConsultando…";
+    let stage = "autenticação";
+    try {
+      if (!owner) {
+        lines.push("Supabase: entre na conta para verificar.");
+      } else {
+        const { client, userId } = await window.entrelinhasCloudAuth.requireSession();
+        if (userId !== owner || generation !== sessionGeneration) throw new Error("A conta conectada mudou.");
+        lines.push(`Conta (impressão SHA-256, compare nos dispositivos): ${await diagnosticHash(owner.toLowerCase())}`);
+        stage = "leitura local";
+        const record = await accountStore.read(owner);
+        stage = "consulta remota";
+        const listed = await window.EntrelinhasImportCore.listBoards(client, owner);
+        lines.push(`Supabase: consulta de quadros concluída; ${listed.length} quadro(s) remoto(s).`);
+        stage = "leitura remota e anexos";
+        const remote = [];
+        for (const row of listed) {
+          const item = await window.EntrelinhasImportCore.loadBoard(client, owner, row.id);
+          if (item.revision !== row.revision) throw new Error("A revisão mudou durante a consulta.");
+          remote.push(item);
+        }
+        const currentSession = await window.entrelinhasCloudAuth.requireSession();
+        if (currentSession.userId !== owner || generation !== sessionGeneration) throw new Error("A conta conectada mudou.");
+        const bases = new Map(record.baseline.map((entry) => [entry.board.id, entry]));
+        const clouds = new Map(remote.map((entry) => [entry.board.id, entry]));
+        const ids = new Set([...record.boards.map((board) => board.id), ...bases.keys(), ...clouds.keys()]);
+        lines.push(`Quadros persistidos localmente: ${record.boards.length}; anexos remotos: verificados.`);
+        for (const id of ids) {
+          const base = bases.get(id);
+          const cloud = clouds.get(id);
+          const local = record.boards.some((board) => board.id === id);
+          const conflict = syncConflicts.find((item) => item.id === id);
+          lines.push(`Quadro ${await diagnosticHash(id)}: local ${local ? "sim" : "não"}; revisão comum ${base?.revision ?? "nenhuma"}; revisão remota ${cloud?.revision ?? "não encontrada"}${cloud?.deleted ? " (excluído)" : ""}; ${conflict ? `conflito (${conflict.reason})` : "sem conflito registrado"}.`);
+        }
+        lines.push("A revisão comum é a última versão remota reconhecida localmente; alterações locais pendentes não têm número de revisão próprio.");
+      }
+    } catch (error) {
+      console.info("[Entrelinhas diagnóstico] falha na consulta:", stage);
+      lines.push(`Supabase: verificação interrompida em ${stage}. ${diagnosticError(error)}`);
+    } finally {
+      if (generation === sessionGeneration) output.textContent = lines.join("\n");
+      button.disabled = false;
+    }
+  });
 
   function renderRecovery(keys) {
     const container = $("#sync-recovery");

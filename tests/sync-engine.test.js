@@ -136,3 +136,14 @@ test("reconexão permite tentar novamente após falha", async () => {
   f.operations.listBoards = original;
   assert.equal((await engine.run(owner))[0].action, "download");
 });
+
+test("diagnóstico informa etapas sem incluir quadros ou credenciais", async () => {
+  const f = fixture({ local: [board("Editado")], baseline: [entry("Original")], remote: [entry("Original")] });
+  const stages = [];
+  await create(f.adapter, f.operations, (stage) => stages.push(stage)).run(owner);
+  assert.ok(stages.includes("consulta remota"));
+  assert.ok(stages.includes("reconciliação"));
+  assert.ok(stages.includes("envio e verificação remota"));
+  assert.ok(stages.includes("aplicação local"));
+  assert.ok(stages.every((stage) => typeof stage === "string" && !stage.includes(owner) && !stage.includes("Editado")));
+});

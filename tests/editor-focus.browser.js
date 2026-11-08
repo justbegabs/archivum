@@ -110,6 +110,12 @@ window.editorFocusTest = (() => {
       assert(saves === 0, "A digitação contínua causou gravações excessivas.");
       await wait(() => remote.board.cards[0].title === "Nota alterada");
       assert(document.activeElement === note && saves === 1, "Autosave interrompeu a edição ou enviou versões extras.");
+      document.querySelector("#sync-diagnostic-run").click();
+      await wait(() => !document.querySelector("#sync-diagnostic-run").disabled);
+      const report = document.querySelector("#sync-diagnostic").textContent;
+      assert(report.includes("Versão do aplicativo:") && report.includes("1 quadro(s) remoto(s)") &&
+        report.includes("revisão remota 1") && !report.includes(owner) && !report.includes("Nota alterada"),
+        "Diagnóstico não mostrou revisões ou expôs dados privados.");
 
       const held = {};
       held.promise = new Promise((resolve) => { held.release = resolve; });
@@ -153,6 +159,11 @@ window.editorFocusTest = (() => {
       note.dispatchEvent(new Event("input", { bubbles: true }));
       await wait(() => document.querySelector("#save-status").textContent.startsWith("Erro:"));
       assert(remote.board.cards[0].title === "Edição offline", "Falha de rede alterou o servidor.");
+      const beforeProbe = saves;
+      document.querySelector("#sync-diagnostic-run").click();
+      await wait(() => !document.querySelector("#sync-diagnostic-run").disabled);
+      assert(document.querySelector("#sync-diagnostic").textContent.includes("Falha de rede") && saves === beforeProbe,
+        "Diagnóstico não identificou a falha de rede ou tentou gravar dados.");
       online = true;
       window.dispatchEvent(new Event("online"));
       await wait(() => remote.board.cards[0].title === "Edição sem rede");
