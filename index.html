@@ -65,6 +65,7 @@
         <div class="breadcrumbs"><span>Meu espaço</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="breadcrumb-title">Meu primeiro quadro</strong></div>
         <div class="top-actions">
           <span class="save-status"><span></span><span id="save-status">Salvo neste dispositivo</span></span>
+          <button class="backup-button" id="backup-all" type="button" title="Baixar backup de todos os quadros e arquivos">Backup completo</button>
           <button class="icon-button" id="theme-toggle" title="Ativar tema escuro" aria-label="Ativar tema escuro" aria-pressed="false"><svg class="icon"><use href="#i-moon"/></svg></button>
           <button class="icon-button export-button" id="export" title="Exportar quadro como JSON" aria-label="Exportar quadro"><svg class="icon"><use href="#i-export"/></svg></button>
           <div class="top-avatar" title="Seu espaço">V</div>
@@ -136,8 +137,10 @@
         <div class="zoom-controls"><button id="zoom-out" aria-label="Diminuir zoom">−</button><button id="zoom-level" title="Restaurar zoom">100%</button><button id="zoom-in" aria-label="Aumentar zoom">+</button><span></span><button id="fit-board" title="Centralizar quadro" aria-label="Centralizar quadro"><svg class="icon"><use href="#i-fit"/></svg></button></div>
       </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="backup-status" id="backup-status" role="status" aria-live="polite"></div>
     </main>
   </div>
   <script src="app.js"></script>
+  <script src="backup.js"></script>
 </body>
 </html>
