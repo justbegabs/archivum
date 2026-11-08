@@ -88,6 +88,19 @@ test("conflito de anexo de outro quadro é detectado antes de baixar", async () 
   assert.deepEqual(f.events, []);
 });
 
+test("adia aplicação remota durante edição e aplica ao terminar", async () => {
+  const f = fixture({ local: [board("Original")], baseline: [entry("Original")], remote: [entry("Remoto", 1)] });
+  let editing = true;
+  f.adapter.deferRemote = () => editing;
+  const engine = create(f.adapter, f.operations);
+  assert.equal((await engine.run(owner))[0].action, "deferred");
+  assert.equal(f.state.boards[0].title, "Original");
+  assert.deepEqual(f.events, []);
+  editing = false;
+  assert.equal((await engine.run(owner))[0].action, "download");
+  assert.equal(f.state.boards[0].title, "Remoto");
+});
+
 test("envia resolução com novo identificador mesmo quando o antigo permanece arquivado", async () => {
   const f = fixture({
     local: [board("Editado")], baseline: [entry("Original")],

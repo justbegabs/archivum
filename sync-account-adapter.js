@@ -20,7 +20,7 @@
 
     async function commit(ownerId, version, change) {
       const record = await store.update(ownerId, version, (data) => {
-        if (!mayCommit(ownerId)) throw new Error("O editor mudou durante a sincronização.");
+        if (!mayCommit(ownerId, change)) throw new Error("O editor mudou durante a sincronização.");
         const prior = data.boards.find((board) => board.id === change.id);
         if (change.remove) {
           if (!prior || !change.archive || core.canonical(prior) !== core.canonical(change.archive)) {

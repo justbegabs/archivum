@@ -77,6 +77,11 @@
             continue;
           }
 
+          if ((action === "download" || action === "delete-local") && adapter.deferRemote?.()) {
+            results.push({ id, action: "deferred" });
+            continue;
+          }
+
           let baseline;
           if (action === "create") {
             await checkSession(ownerId);

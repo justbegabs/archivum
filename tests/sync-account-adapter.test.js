@@ -5,7 +5,7 @@ const { create } = require("../sync-account-adapter.js");
 const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const board = { id: "board", title: "Teste", cards: [{ imageId: "img" }], connections: [] };
 
-function fixture() {
+function fixture(guard) {
   let record = { version: 0, boards: [structuredClone(board)], activeBoardId: board.id, baseline: [], archive: [], theme: "light" };
   const file = new Blob(["imagem"]);
   const store = {
@@ -20,7 +20,7 @@ function fixture() {
       return structuredClone(record);
     }
   };
-  return { adapter: create(store, async () => ({ userId: owner, client: {} })), read: () => structuredClone(record), file };
+  return { adapter: create(store, async () => ({ userId: owner, client: {} }), guard), read: () => structuredClone(record), file };
 }
 
 test("adaptador recupera anexos pelo ID e não ignora arquivo ausente", async () => {
@@ -55,4 +55,15 @@ test("não aplica exclusão remota se o quadro a arquivar for diferente", async 
   }), /mudou antes/);
   assert.deepEqual(read().boards, [board]);
   assert.deepEqual(read().baseline, []);
+});
+
+test("guarda transacional permite registrar revisão sem substituir quadro em edição", async () => {
+  const { adapter, read } = fixture((_owner, change) => !change.board && !change.remove);
+  const baseline = { board, revision: 1 };
+  assert.equal(await adapter.commit(owner, 0, { id: board.id, baseline }), 1);
+  await assert.rejects(adapter.commit(owner, 1, {
+    id: board.id, baseline: { board, revision: 2 }, board: { ...board, title: "Remoto" }
+  }), /editor mudou/);
+  assert.deepEqual(read().boards, [board]);
+  assert.deepEqual(read().baseline, [baseline]);
 });

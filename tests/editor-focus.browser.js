@@ -14,6 +14,9 @@ window.editorFocusTest = (() => {
     revision: 0, files: new Map(), deleted: false
   };
   let saves = 0;
+  let attempts = 0;
+  let online = true;
+  let holdNext;
   const wait = async (predicate) => {
     for (let count = 0; count < 150; count++) {
       if (predicate()) return;
@@ -25,9 +28,19 @@ window.editorFocusTest = (() => {
   async function start() {
     window.entrelinhasCloudAuth = { requireSession: async () => ({ client: {}, userId: owner }) };
     Object.assign(core, {
-      async listBoards() { return [{ id: "focus-board", revision: remote.revision }]; },
+      async listBoards() {
+        if (!online) throw new Error("Rede de teste indisponível");
+        return [{ id: "focus-board", revision: remote.revision }];
+      },
       async loadBoard() { return structuredClone(remote); },
       async saveBoard(_client, _owner, board, files, revision) {
+        attempts++;
+        if (holdNext) {
+          const held = holdNext;
+          holdNext = null;
+          await held.promise;
+        }
+        if (!online) throw new Error("Rede de teste indisponível");
         if (revision !== remote.revision) throw new Error("Conflito de revisão no teste.");
         remote = { board: structuredClone(board), files, revision: revision + 1, deleted: false };
         saves++;
@@ -75,6 +88,7 @@ window.editorFocusTest = (() => {
   async function run() {
     const viewport = document.querySelector("#viewport");
     const capture = viewport.setPointerCapture;
+    const onlineProperty = Object.getOwnPropertyDescriptor(navigator, "onLine");
     const assert = (condition, message) => { if (!condition) throw new Error(message); };
     const clickCanvas = () => {
       const bounds = viewport.getBoundingClientRect();
@@ -88,13 +102,61 @@ window.editorFocusTest = (() => {
       viewport.setPointerCapture = () => {};
       const note = document.querySelector('[data-card-id="note"] [data-field="title"]');
       note.focus();
-      note.textContent = "Nota alterada";
+      for (const value of ["N", "No", "Nota alterada"]) {
+        note.textContent = value;
+        note.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      assert(saves === 0, "A digitação contínua causou gravações excessivas.");
+      await wait(() => remote.board.cards[0].title === "Nota alterada");
+      assert(document.activeElement === note && saves === 1, "Autosave interrompeu a edição ou enviou versões extras.");
+
+      const held = {};
+      held.promise = new Promise((resolve) => { held.release = resolve; });
+      holdNext = held;
+      note.textContent = "Primeira versão";
       note.dispatchEvent(new Event("input", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 3200));
-      assert(remote.board.cards[0].title === "Nota inicial", "Campo em edição foi substituído.");
+      await wait(() => attempts === 2);
+      note.textContent = "Edição durante envio";
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+      const journalKey = Object.keys(localStorage).find((key) => key.startsWith(`entrelinhas-draft-v1:${owner}:`));
+      assert(journalKey && JSON.parse(localStorage.getItem(journalKey)).state.boards[0].cards[0].title === "Edição durante envio",
+        "A última edição não foi persistida imediatamente.");
+      held.release();
+      await wait(() => remote.board.cards[0].title === "Edição durante envio");
+      assert(saves === 3 && document.querySelector("#sync-conflicts").hidden, "Edição durante envio gerou perda ou conflito falso.");
+
+      note.textContent = "Enviar ao sair";
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+      const blurStart = performance.now();
       clickCanvas();
       assert(document.activeElement !== note, "Clique no quadro não encerrou a edição.");
-      await wait(() => remote.board.cards[0].title === "Nota alterada");
+      await wait(() => remote.board.cards[0].title === "Enviar ao sair");
+      assert(performance.now() - blurStart < 1000, "Sair do campo não antecipou a sincronização.");
+
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+      window.dispatchEvent(new Event("offline"));
+      assert(document.querySelector("#save-status").textContent === "Offline", "Estado offline não foi exibido.");
+      note.focus();
+      note.textContent = "Edição offline";
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 1300));
+      assert(remote.board.cards[0].title === "Enviar ao sair" &&
+        document.querySelector("#save-status").textContent === "Offline", "Edição offline não foi preservada.");
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+      window.dispatchEvent(new Event("online"));
+      await wait(() => remote.board.cards[0].title === "Edição offline");
+
+      online = false;
+      note.focus();
+      note.textContent = "Edição sem rede";
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(() => document.querySelector("#save-status").textContent.startsWith("Erro:"));
+      assert(remote.board.cards[0].title === "Edição offline", "Falha de rede alterou o servidor.");
+      online = true;
+      window.dispatchEvent(new Event("online"));
+      await wait(() => remote.board.cards[0].title === "Edição sem rede");
+      assert(document.activeElement === note, "Reconexão interrompeu a edição.");
 
       const editor = document.querySelector(".rich-text");
       editor.focus();
@@ -117,9 +179,27 @@ window.editorFocusTest = (() => {
       title.dispatchEvent(new Event("input", { bubbles: true }));
       clickCanvas();
       await wait(() => remote.board.title === "Título alterado");
-      return ["clique fora e sincronização", "campo em edição preservado", "formatação", "título do quadro"];
+
+      title.focus();
+      remote.board.title = "Alteração de outro dispositivo";
+      remote.revision++;
+      window.dispatchEvent(new Event("online"));
+      await wait(() => document.querySelector("#save-status").textContent === "Atualização da nuvem pendente");
+      assert(document.activeElement === title && title.textContent === "Título alterado",
+        "Atualização remota interrompeu o campo em edição.");
+      clickCanvas();
+      assert(document.activeElement !== title, "Foco do título permaneceu após clicar fora.");
+      try {
+        await wait(() => document.querySelector("#board-title").textContent === "Alteração de outro dispositivo");
+      } catch (error) {
+        throw new Error(`${error.message} Estado: ${document.querySelector("#save-status").textContent}; foco: ${document.activeElement?.id}; conflitos: ${document.querySelector("#sync-conflicts").textContent}`);
+      }
+      return ["debounce durante digitação", "autosave com foco", "edição durante envio", "persistência imediata",
+        "sincronização ao sair", "offline e reconexão", "falha de rede", "formatação", "atualização remota adiada"];
     } finally {
       viewport.setPointerCapture = capture;
+      if (onlineProperty) Object.defineProperty(navigator, "onLine", onlineProperty);
+      else delete navigator.onLine;
       await stop();
     }
   }

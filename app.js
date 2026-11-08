@@ -9,14 +9,17 @@
   const accountStore = window.EntrelinhasAccountStore.create(indexedDB);
   const accountAdapter = window.EntrelinhasAccountAdapter.create(
     accountStore, () => window.entrelinhasCloudAuth.requireSession(),
-    (owner) => account === owner && (!syncing || syncEpoch === accountEpoch)
+    (owner, change) => account === owner && (!(change.board || change.remove) ||
+      ((!syncing || syncEpoch === accountEpoch) && !editingText()))
   );
+  accountAdapter.deferRemote = () => editingText();
   const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter);
   let account = null;
   let accountVersion = 0;
   let accountEpoch = 0;
   let accountQueue = Promise.resolve();
   let syncTimer;
+  let syncRequestedAt = null;
   let syncing = false;
   let resolvingConflict = false;
   let syncEpoch = 0;
@@ -253,7 +256,7 @@
         const epoch = ++accountEpoch;
         const journalKey = `entrelinhas-draft-v1:${owner}:${tabId}`;
         localStorage.setItem(journalKey, JSON.stringify({ version: accountVersion, state: snapshot }));
-        status.textContent = "Salvo localmente";
+        status.textContent = "Salvando localmente";
         if (accountBlocked) throw new Error("Sincronização bloqueada. O rascunho foi preservado neste navegador.");
         const barrier = syncBarrier;
         accountQueue = accountQueue.then(async () => {
@@ -264,7 +267,10 @@
           if (!record) throw new Error("Outra aba alterou os dados. O rascunho foi preservado; não feche esta aba.");
           if (account !== owner) return;
           accountVersion = record.version;
-          if (epoch === accountEpoch) localStorage.removeItem(journalKey);
+          if (epoch === accountEpoch) {
+            localStorage.removeItem(journalKey);
+            if (!syncing) status.textContent = navigator.onLine ? "Pendente de sincronização" : "Offline";
+          }
         }).catch((error) => {
           console.error("Falha ao persistir rascunho:", error);
           if (account === owner) {
@@ -285,16 +291,25 @@
       return true;
     } catch (error) {
       console.error("Não foi possível salvar o quadro:", error);
-      status.textContent = "Não foi possível salvar";
+      status.textContent = "Erro: não foi possível salvar localmente";
       status.parentElement.classList.add("error");
       showToast("Não foi possível salvar neste dispositivo.");
       return false;
     }
   }
 
-  function scheduleSync(delay = 1200) {
+  function scheduleSync(delay = 1000) {
     clearTimeout(syncTimer);
-    if (account && !accountBlocked) syncTimer = setTimeout(syncAccount, delay);
+    syncRequestedAt = null;
+    if (account && !accountBlocked) {
+      syncRequestedAt = Date.now() + delay;
+      syncTimer = setTimeout(syncAccount, delay);
+    }
+  }
+
+  function editingText() {
+    const active = document.activeElement;
+    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active));
   }
 
   document.addEventListener("pointerdown", (event) => {
@@ -302,15 +317,16 @@
     if (event.button !== 0 || !active?.isContentEditable ||
         active.contains(event.target) || $("#format-toolbar").contains(event.target)) return;
     active.blur();
+    scheduleSync(0);
   }, true);
 
-  document.addEventListener("focusout", (event) => {
+  document.addEventListener("blur", (event) => {
     if (!event.target.isContentEditable && !$("#format-toolbar").contains(event.target)) return;
     setTimeout(() => {
       const active = document.activeElement;
-      if (!active?.isContentEditable && !$("#format-toolbar").contains(active)) scheduleSync(0);
+      if (!$("#format-toolbar").contains(active)) scheduleSync(0);
     }, 0);
-  });
+  }, true);
 
   function applyAccountState(record) {
     state = { boards: structuredClone(record.boards), activeBoardId: record.activeBoardId, theme: record.theme };
@@ -332,13 +348,24 @@
 
   async function syncAccount() {
     if (!account || syncing || resolvingConflict || accountBlocked) return;
-    if (interaction || document.activeElement?.isContentEditable || $("#format-toolbar").contains(document.activeElement)) {
+    if (interaction) {
       scheduleSync(3000);
       return;
     }
+    if (!navigator.onLine) {
+      status.textContent = "Offline";
+      scheduleSync(15000);
+      return;
+    }
     const owner = account;
-    await accountQueue;
-    if (account !== owner || accountBlocked || syncing) return;
+    let queued;
+    do {
+      queued = accountQueue;
+      await queued;
+    } while (account === owner && accountQueue !== queued);
+    if (account !== owner || accountBlocked || syncing || resolvingConflict) return;
+    clearTimeout(syncTimer);
+    syncRequestedAt = null;
     syncing = true;
     syncBarrier = new Promise((resolve) => { releaseSync = resolve; });
     syncEpoch = accountEpoch;
@@ -354,7 +381,7 @@
           throw new Error("O quadro mudou durante a sincronização. O rascunho foi preservado; recupere-o antes de continuar.");
         }
         accountVersion = record.version;
-        status.textContent = "Salvo localmente";
+        status.textContent = navigator.onLine ? "Pendente de sincronização" : "Offline";
         return;
       }
       accountVersion = record.version;
@@ -371,6 +398,9 @@
       if (conflicts.length) {
         status.textContent = `Conflito: ${conflicts.length} quadro(s)`;
         status.parentElement.classList.add("error");
+      } else if (results.some((result) => result.action === "deferred")) {
+        status.textContent = "Atualização da nuvem pendente";
+        status.parentElement.classList.remove("error");
       } else {
         status.textContent = "Salvo na nuvem";
         status.parentElement.classList.remove("error");
@@ -396,13 +426,16 @@
             renderRecovery(Object.keys(localStorage).filter((key) => key.startsWith(prefix)));
           }
         }
-        status.textContent = navigator.onLine ? `Não sincronizado: ${error.message}` : "Offline — salvo localmente";
+        status.textContent = navigator.onLine ? `Erro: ${error.message}` : "Offline";
         status.parentElement.classList.add("error");
       }
     } finally {
       syncing = false;
       releaseSync();
-      if (account && !accountBlocked) scheduleSync(account !== owner ? 0 : syncEpoch !== accountEpoch ? 1200 : 15000);
+      if (account && !accountBlocked) {
+        const delay = account !== owner ? 0 : syncRequestedAt !== null ? Math.max(0, syncRequestedAt - Date.now()) : 15000;
+        scheduleSync(delay);
+      }
     }
   }
 
@@ -410,6 +443,7 @@
     if (owner === account) return;
     const generation = ++sessionGeneration;
     clearTimeout(syncTimer);
+    syncRequestedAt = null;
     syncConflicts = [];
     renderSyncConflicts();
     $("#sync-recovery").hidden = true;
@@ -1684,10 +1718,10 @@
     });
   });
   window.addEventListener("online", () => scheduleSync(0));
-  window.addEventListener("entrelinhas-imported", () => scheduleSync(0));
   window.addEventListener("offline", () => {
-    if (account) status.textContent = "Offline — salvo localmente";
+    if (account) status.textContent = "Offline";
   });
+  window.addEventListener("entrelinhas-imported", () => scheduleSync(0));
 
   load();
   updateTheme();
