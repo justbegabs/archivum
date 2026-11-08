@@ -1,5 +1,8 @@
 -- Entrelinhas: execute uma vez no SQL Editor do projeto Supabase.
 -- Este script prepara o banco; ele nao conecta o site ao Supabase.
+-- ATENCAO: o modelo antigo concede acesso de editor por e-mail confirmado
+-- sem aceite por token, expiracao ou permissao de visualizador. Ele nao
+-- implementa os novos requisitos de compartilhamento seguro.
 begin;
 
 create table public.entrelinhas_boards (

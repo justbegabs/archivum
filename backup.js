@@ -61,6 +61,55 @@
     }
   }
 
+  async function inspectLocalData() {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (raw === null) throw new Error("Nenhum quadro salvo foi encontrado neste endereço e navegador.");
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (error) {
+      throw new Error("Os dados locais não são um JSON válido. Faça o backup antes de prosseguir.");
+    }
+    if (!data || !Array.isArray(data.boards) || !data.boards.every((board) =>
+      board && typeof board.id === "string" && Array.isArray(board.cards) && Array.isArray(board.connections))) {
+      throw new Error("A estrutura dos quadros locais é inválida. Faça o backup antes de prosseguir.");
+    }
+    const refs = references(raw);
+    const files = await readFiles();
+    const keys = new Set(files.records.map((record) => record.key));
+    const missing = [...refs.ids].filter((key) => !keys.has(key));
+    const unreferenced = files.records.filter((record) => !refs.ids.has(record.key)).length;
+    if (raw !== localStorage.getItem(STATE_KEY)) {
+      throw new Error("Os dados locais mudaram durante a verificação. Tente novamente.");
+    }
+    return {
+      boards: data.boards.length,
+      referenced: refs.ids.size,
+      available: [...refs.ids].filter((key) => keys.has(key)).length,
+      missing,
+      unreferenced
+    };
+  }
+
+  const inspectButton = document.querySelector("#inspect-migration");
+  const inspectStatus = document.querySelector("#migration-status");
+  document.querySelector("#migration-backup").addEventListener("click", () => button.click());
+  inspectButton.addEventListener("click", async () => {
+    inspectButton.disabled = true;
+    inspectStatus.textContent = "Verificando os dados salvos neste navegador…";
+    try {
+      const result = await inspectLocalData();
+      inspectStatus.textContent = `${result.boards} quadro(s), ${result.referenced} arquivo(s) referenciado(s), ${result.available} disponível(is) e ${result.unreferenced} arquivo(s) sem referência. ` +
+        (result.missing.length ? `Atenção: ${result.missing.length} arquivo(s) referenciado(s) não foram encontrados. ` : "") +
+        "A importação para o Supabase ainda não está disponível. Gere e confira o backup antes de migrar.";
+    } catch (error) {
+      console.error("Falha ao verificar dados locais:", error);
+      inspectStatus.textContent = `Não foi possível verificar os dados: ${error.message}`;
+    } finally {
+      inspectButton.disabled = false;
+    }
+  });
+
   function toDataURL(blob) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

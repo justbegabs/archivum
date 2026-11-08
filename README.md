@@ -22,6 +22,40 @@ Os quadros são salvos no armazenamento local do navegador e os arquivos anexado
 
 ## Preparação do Supabase
 
-O arquivo [supabase-setup.sql](supabase-setup.sql) prepara tabelas, convites por e-mail confirmado, regras de acesso, um bucket privado e notificações de alterações. Execute-o uma vez no SQL Editor do projeto. Antes de executar, confira que não existem tabelas ou políticas com os mesmos nomes. O script interrompe a operação se o bucket existente for público. Os limites de upload dependem também da configuração e do plano do Supabase.
+**Compartilhamento seguro ainda não está disponível.** O esquema antigo abaixo
+concede acesso de editor a um e-mail confirmado assim que ele é adicionado,
+sem aceite por link, expiração ou opção de visualizador. Não o utilize como
+implementação dos novos requisitos de compartilhamento. A substituição desse
+modelo deverá exigir novos convites também para os acessos antigos, conforme
+solicitado, e será apresentada para revisão antes de qualquer execução.
 
-Essa preparação **não integra o site à nuvem**: login, migração dos quadros locais, interface de convites, sincronização e tratamento de conflitos ainda precisam ser implementados. Convites são registros de permissão; o script não envia e-mails. A futura integração deve armazenar arquivos em `<id-do-quadro>/<nome-do-arquivo>`, usar `entrelinhas_save_board` com a revisão atual e tratar conflitos sem perder alterações. Não use a chave secreta ou `service_role` no navegador.
+O arquivo legado [supabase-setup.sql](supabase-setup.sql) prepara tabelas, convites por e-mail confirmado, regras de acesso, um bucket privado e notificações de alterações. Ele não deve ser executado para habilitar o novo compartilhamento seguro. O script interrompe a operação se o bucket existente for público. Os limites de upload dependem também da configuração e do plano do Supabase.
+
+Essa preparação **não integra os quadros à nuvem**: migração dos quadros locais, CRUD remoto, interface de convites, sincronização e tratamento de conflitos ainda precisam ser implementados. Convites são registros de permissão; o script não envia e-mails. A futura integração deve armazenar arquivos em `<id-do-quadro>/<nome-do-arquivo>`, usar `entrelinhas_save_board` com a revisão atual e tratar conflitos sem perder alterações. Não use a chave secreta ou `service_role` no navegador.
+
+O botão **Entrar com Google** inicia a autenticação no projeto Supabase configurado; **Sair** encerra a sessão. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. A sessão usa o armazenamento do Supabase no navegador. A autenticação, por si só, **não envia nem sincroniza quadros**. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) complementa o script anterior e não é executada automaticamente; a exclusão de objetos no Storage ainda precisa ser tratada pela futura integração.
+
+Na página inicial, **Verificar dados locais** informa o número de quadros, arquivos referenciados, arquivos disponíveis e arquivos sem referência, além de alertar sobre referências ausentes. A verificação é somente leitura e não inicia a importação; a migração para o Supabase ainda não está implementada.
+
+## Colaboração em tempo real
+
+A colaboração em tempo real ainda não está implementada. O editor usa apenas
+armazenamento local; a publicação Realtime e a função de revisão no script
+legado, por si só, não conectam o editor nem fornecem o compartilhamento seguro.
+Também não há fila offline de operações, histórico remoto ou resolução de
+conflitos.
+
+Para edição simultânea do mesmo campo de texto, uma substituição do HTML
+completo não permite mesclar alterações concorrentes com segurança. Um CRDT
+como Yjs deve ser avaliado junto com um editor de texto compatível, incluindo
+formatação, persistência de operações offline, reconexão e permissões. Até essa
+integração ser validada, edições concorrentes no mesmo campo devem ser
+tratadas como conflito explícito, preservando as duas versões, em vez de
+selecionar silenciosamente a última gravação.
+
+A implementação depende primeiro de quadros e anexos na nuvem, migração
+verificada sem apagar os dados locais e permissões de proprietário, editor e
+visualizador efetivas também no Storage. Depois, será necessário persistir
+rascunhos e alterações pendentes por usuário e quadro, comparar revisões no
+servidor, recuperar alterações perdidas na reconexão e manter versões
+recuperáveis. Nenhum desses mecanismos é ativado por este documento.

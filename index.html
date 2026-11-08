@@ -65,6 +65,8 @@
         <div class="breadcrumbs"><span>Meu espaço</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="breadcrumb-title">Meu primeiro quadro</strong></div>
         <div class="top-actions">
           <span class="save-status"><span></span><span id="save-status">Salvo neste dispositivo</span></span>
+          <button class="backup-button" id="cloud-login" type="button" disabled>Entrar com Google</button>
+          <button class="backup-button" id="cloud-logout" type="button" hidden>Sair</button>
           <button class="backup-button" id="backup-all" type="button" title="Baixar backup de todos os quadros e arquivos">Backup completo</button>
           <button class="icon-button" id="theme-toggle" title="Ativar tema escuro" aria-label="Ativar tema escuro" aria-pressed="false"><svg class="icon"><use href="#i-moon"/></svg></button>
           <button class="icon-button export-button" id="export" title="Exportar quadro como JSON" aria-label="Exportar quadro"><svg class="icon"><use href="#i-export"/></svg></button>
@@ -78,6 +80,7 @@
           <button class="primary-button" id="home-new-board"><svg class="icon"><use href="#i-plus"/></svg> Novo quadro</button>
         </div>
         <div class="home-section-heading"><div><h2>Seus quadros</h2><p>Escolha um quadro para continuar criando.</p></div><span id="home-board-count"></span></div>
+        <div class="migration-preflight"><strong>Preparar importação para a nuvem</strong><p>Confira os dados locais e baixe um backup antes de migrar. Nenhum dado será enviado nesta etapa.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup completo</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
         <div class="home-grid" id="home-grid"></div>
         <input id="cover-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
       </section>
@@ -138,9 +141,12 @@
       </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="backup-status" id="backup-status" role="status" aria-live="polite"></div>
+      <div class="cloud-account" id="cloud-account" aria-live="polite">Não conectado</div>
+      <div class="cloud-status" id="cloud-status" role="status" aria-live="polite"></div>
     </main>
   </div>
   <script src="app.js"></script>
   <script src="backup.js"></script>
+  <script src="cloud-auth.js"></script>
 </body>
 </html>
