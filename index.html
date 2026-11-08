@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f4">
   <title>Entrelinhas — seu espaço para pensar</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2026-11-08-resize-1">
 </head>
 <body>
   <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg">
@@ -165,6 +165,15 @@
       <div class="cloud-status" id="cloud-status" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <dialog id="image-frame-dialog" class="image-frame-dialog" aria-labelledby="image-frame-title">
+    <h2 id="image-frame-title">Enquadramento da imagem</h2>
+    <p>Os ajustes não alteram o arquivo original.</p>
+    <div id="image-frame-preview" class="image-frame-preview"><img alt="Prévia do enquadramento"></div>
+    <label>Ampliação <input id="image-frame-zoom" type="range" min="100" max="300" step="1"></label>
+    <label>Posição horizontal <input id="image-frame-x" type="range" min="0" max="100" step="1"></label>
+    <label>Posição vertical <input id="image-frame-y" type="range" min="0" max="100" step="1"></label>
+    <div class="image-frame-actions"><button id="image-frame-reset" type="button">Restaurar imagem inteira</button><button id="image-frame-close" type="button">Concluir</button></div>
+  </dialog>
   <script src="sync-import-core.js?v=2026-11-08-diagnostico-1"></script>
   <script src="account-backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-reconcile.js?v=2026-11-08-diagnostico-1"></script>
@@ -172,7 +181,7 @@
   <script src="sync-engine.js?v=2026-11-08-relatorio-1"></script>
   <script src="sync-account-store.js?v=2026-11-08-diagnostico-1"></script>
   <script src="sync-account-adapter.js?v=2026-11-08-diagnostico-1"></script>
-  <script src="app.js?v=2026-11-08-mobile-1"></script>
+  <script src="app.js?v=2026-11-08-resize-1"></script>
   <script src="backup.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-import.js?v=2026-11-08-diagnostico-1"></script>
   <script src="cloud-view.js?v=2026-11-08-diagnostico-1"></script>

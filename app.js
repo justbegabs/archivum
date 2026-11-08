@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "2026-11-08-mobile-1";
+  const APP_VERSION = "2026-11-08-resize-1";
   const STORAGE_KEY = "entrelinhas-boards-v1";
   const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024;
@@ -11,9 +11,9 @@
   const accountAdapter = window.EntrelinhasAccountAdapter.create(
     accountStore, () => window.entrelinhasCloudAuth.requireSession(),
     (owner, change) => account === owner && (!(change.board || change.remove) ||
-      ((!syncing || syncEpoch === accountEpoch) && !editingText()))
+      ((!syncing || syncEpoch === accountEpoch) && !editingText() && !interaction))
   );
-  accountAdapter.deferRemote = () => editingText();
+  accountAdapter.deferRemote = () => editingText() || Boolean(interaction);
   const diagnostic = { stage: "aguardando", attempt: null, success: null, error: null, run: 0, events: [] };
   let diagnosticReport = null;
   function diagnosticEvent(stage) {
@@ -76,6 +76,7 @@
   let pinch = null;
   let viewWidth = 0;
   let resizeViewTimer;
+  let framingCard = null;
   let toastTimer;
   let textRange = null;
   let activeTextId = null;
@@ -324,7 +325,7 @@
 
   function editingText() {
     const active = document.activeElement;
-    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active));
+    return Boolean(active?.isContentEditable || $("#format-toolbar").contains(active) || $("#image-frame-dialog").open);
   }
 
   document.addEventListener("pointerdown", (event) => {
@@ -344,6 +345,8 @@
   }, true);
 
   function applyAccountState(record) {
+    if ($("#image-frame-dialog").open) $("#image-frame-dialog").close();
+    framingCard = null;
     state = { boards: structuredClone(record.boards), activeBoardId: record.activeBoardId, theme: record.theme };
     renderAccountArchive(record.archive || []);
     folderPath = [];
@@ -1192,8 +1195,14 @@
   function renderCards() {
     const board = currentCanvas();
     cardsElement.innerHTML = board.cards.map((card) => {
-      const controls = `<div class="card-controls"><button data-action="connect" title="Conectar item" aria-label="Conectar item">${icon("link")}</button><button data-action="delete" title="Excluir item" aria-label="Excluir item">${icon("trash")}</button></div>`;
-      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}" style="left:${card.x}px;top:${card.y}px;width:${card.width}px${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
+      const scalableText = ["text", "note", "sticky", "heading", "photo", "folder"].includes(card.type);
+      const textControls = scalableText ? `<button data-action="text-smaller" title="Diminuir texto" aria-label="Diminuir texto">A−</button><button data-action="text-larger" title="Aumentar texto" aria-label="Aumentar texto">A+</button>` : "";
+      const frameControl = card.type === "image" ? `<button data-action="frame" title="Ajustar enquadramento" aria-label="Ajustar enquadramento">▣</button>` : "";
+      const controls = `<div class="card-controls">${textControls}${frameControl}<button data-action="connect" title="Conectar item" aria-label="Conectar item">${icon("link")}</button><button data-action="delete" title="Excluir item" aria-label="Excluir item">${icon("trash")}</button></div>`;
+      const resize = ["text", "note", "sticky", "heading", "photo", "folder", "image", "video"].includes(card.type)
+        ? `<button class="item-resize" data-resize-item aria-label="Redimensionar item" title="Arraste para redimensionar"></button>` : "";
+      const textScale = Number.isFinite(card.textScale) ? Math.min(3, Math.max(0.5, card.textScale)) : 1;
+      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}"${card.type === "video" && card.mediaResized === true ? " data-media-resized" : ""}${Number.isFinite(card.textScale) ? " data-text-scaled" : ""} style="left:${card.x}px;top:${card.y}px;width:${card.width}px;--text-scale:${textScale}${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
       if (card.type === "shape") {
         const color = /^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa";
         const shape = card.shape === "ellipse" ? `<ellipse cx="50" cy="50" rx="48" ry="48"/>` : card.shape === "triangle" ? `<polygon points="50,2 98,98 2,98"/>` : `<rect x="2" y="2" width="96" height="96" rx="2"/>`;
@@ -1206,26 +1215,115 @@
         const size = Math.min(30, Math.max(1, Number(card.brushSize) || 4));
         return `<article ${attributes}>${controls}<svg class="drawing-image" width="${card.width}" height="${card.height}" aria-label="Desenho"><path d="${path}${points.length === 1 ? " l0.01 0" : ""}" fill="none" stroke="${color}" stroke-width="${size}" stroke-linecap="round" stroke-linejoin="round" ${card.brush === "marker" ? 'opacity=".35"' : ""} ${card.brush === "dashed" ? `stroke-dasharray="${size * 2} ${size * 2}"` : ""}/></svg></article>`;
       }
-      if (card.type === "text") return `<article ${attributes}>${controls}<div class="card-inner"><div class="rich-text" contenteditable="true" role="textbox" aria-label="Texto formatável" aria-multiline="true" data-field="html">${sanitizeRichText(card.html || "")}</div></div></article>`;
-      if (card.type === "image") return `<article ${attributes}>${controls}<div class="card-inner"><img class="attached-image" ${card.imageId ? `data-media-id="${escapeHTML(card.imageId)}"` : `src="${escapeHTML(card.image || "")}"`} alt="${escapeHTML(card.alt || "Imagem anexada")}" draggable="false"></div></article>`;
+      if (card.type === "text") return `<article ${attributes}>${controls}<div class="card-inner"><div class="rich-text" contenteditable="true" role="textbox" aria-label="Texto formatável" aria-multiline="true" data-field="html">${sanitizeRichText(card.html || "")}</div></div>${resize}</article>`;
+      if (card.type === "image") return `<article ${attributes}>${controls}<div class="card-inner image-frame"><img class="attached-image" ${card.imageId ? `data-media-id="${escapeHTML(card.imageId)}"` : `src="${escapeHTML(card.image || "")}"`} alt="${escapeHTML(card.alt || "Imagem anexada")}" draggable="false"></div>${resize}</article>`;
       if (card.type === "document" || card.type === "video") {
         const name = escapeHTML(card.name);
         const download = `<a class="attachment-download" data-media-id="${escapeHTML(card.fileId)}" download="${name}" aria-label="Baixar ${name}">${icon("export")} Baixar arquivo</a>`;
         const player = card.type === "video" ? `<video class="attached-video" controls preload="metadata" playsinline data-media-id="${escapeHTML(card.fileId)}" aria-label="Vídeo: ${name}"></video>` : "";
-        return `<article ${attributes}>${controls}<div class="card-inner">${player}<div class="attachment-content"><div class="attachment-icon">${icon(card.type === "video" ? "video" : "note")}</div><div class="attachment-details"><div class="attachment-kind">${card.type === "video" ? "VÍDEO" : "DOCUMENTO"}</div><div class="attachment-name">${name}</div><div class="attachment-size">${escapeHTML(formatFileSize(card.size))}</div></div></div>${download}</div></article>`;
+        return `<article ${attributes}>${controls}<div class="card-inner">${player}<div class="attachment-content"><div class="attachment-icon">${icon(card.type === "video" ? "video" : "note")}</div><div class="attachment-details"><div class="attachment-kind">${card.type === "video" ? "VÍDEO" : "DOCUMENTO"}</div><div class="attachment-name">${name}</div><div class="attachment-size">${escapeHTML(formatFileSize(card.size))}</div></div></div>${download}</div>${resize}</article>`;
       }
-      if (card.type === "folder") return `<article ${attributes}>${controls}<div class="card-inner folder-content"><div class="folder-icon">${icon("folder")}</div><div class="folder-label">PASTA</div><div class="card-title" contenteditable="true" data-field="title" spellcheck="false" aria-label="Nome da pasta">${escapeHTML(card.title)}</div><div class="folder-count">${card.cards.length} ${card.cards.length === 1 ? "item" : "itens"}</div><button class="folder-open" data-action="open-folder">Abrir pasta ${icon("arrow")}</button></div></article>`;
+      if (card.type === "folder") return `<article ${attributes}>${controls}<div class="card-inner folder-content"><div class="folder-icon">${icon("folder")}</div><div class="folder-label">PASTA</div><div class="card-title" contenteditable="true" data-field="title" spellcheck="false" aria-label="Nome da pasta">${escapeHTML(card.title)}</div><div class="folder-count">${card.cards.length} ${card.cards.length === 1 ? "item" : "itens"}</div><button class="folder-open" data-action="open-folder">Abrir pasta ${icon("arrow")}</button></div>${resize}</article>`;
       const cover = card.type === "photo" ? `<div class="photo-cover" style="background-image:url('${escapeHTML(card.image || "")}')"></div>` : "";
       const tag = card.tag ? `<div class="card-meta"><span>${escapeHTML(card.tag)}</span></div>` : "";
       return `<article ${attributes}>
         ${controls}
-        <div class="card-inner">${cover}<div class="card-content"><div class="card-kicker" contenteditable="true" data-field="kicker" spellcheck="false">${escapeHTML(card.kicker)}</div><div class="card-title" contenteditable="true" data-field="title" spellcheck="false">${escapeHTML(card.title)}</div><div class="card-body" contenteditable="true" data-field="body" spellcheck="false">${escapeHTML(card.body)}</div>${tag}</div></div>
+        <div class="card-inner">${cover}<div class="card-content"><div class="card-kicker" contenteditable="true" data-field="kicker" spellcheck="false">${escapeHTML(card.kicker)}</div><div class="card-title" contenteditable="true" data-field="title" spellcheck="false">${escapeHTML(card.title)}</div><div class="card-body" contenteditable="true" data-field="body" spellcheck="false">${escapeHTML(card.body)}</div>${tag}</div></div>${resize}
       </article>`;
     }).join("") || `<div class="empty-board"><strong>Uma página em branco, infinitas possibilidades.</strong><p>Adicione uma nota pela barra abaixo e comece a dar forma às suas ideias.</p></div>`;
     $("#card-count").textContent = `${board.cards.length} ${board.cards.length === 1 ? "ITEM" : "ITENS"}`;
     loadMedia(cardsElement);
+    for (const card of board.cards.filter((item) => item.type === "image")) {
+      const element = cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`);
+      applyImageFrame(card, element);
+    }
     requestAnimationFrame(renderConnections);
   }
+
+  function applyImageFrame(card, element) {
+    const frame = element?.querySelector(".image-frame");
+    const image = frame?.querySelector(".attached-image");
+    if (!frame || !image) return;
+    const active = Number.isFinite(card.frameHeight) && card.frameHeight >= 40;
+    frame.classList.toggle("image-frame-adjusted", active);
+    frame.style.height = active ? `${card.frameHeight}px` : "";
+    if (active) setImageFrameStyle(image, card);
+    else { image.style.objectPosition = ""; image.style.transform = ""; }
+  }
+
+  function setImageFrameStyle(image, card) {
+    const x = Number.isFinite(card.frameX) ? Math.min(100, Math.max(0, card.frameX)) : 50;
+    const y = Number.isFinite(card.frameY) ? Math.min(100, Math.max(0, card.frameY)) : 50;
+    const scale = Number.isFinite(card.frameZoom) ? Math.min(3, Math.max(1, card.frameZoom)) : 1;
+    image.style.objectPosition = `${x}% ${y}%`;
+    image.style.transform = `translate(${(50 - x) * (scale - 1)}%, ${(50 - y) * (scale - 1)}%) scale(${scale})`;
+  }
+
+  function openImageFrame(card, element) {
+    framingCard = { card, board: currentCanvas(), owner: account };
+    $("#image-frame-zoom").value = String(Math.round((card.frameZoom ?? 1) * 100));
+    $("#image-frame-x").value = String(card.frameX ?? 50);
+    $("#image-frame-y").value = String(card.frameY ?? 50);
+    framingCard.initialHeight = Math.max(40, element.querySelector(".image-frame").offsetHeight);
+    $("#image-frame-preview img").src = element.querySelector(".attached-image").src;
+    updateFramePreview(framingCard);
+    $("#image-frame-dialog").showModal();
+  }
+
+  function updateFramePreview(framing) {
+    const card = framing.card;
+    const preview = $("#image-frame-preview");
+    const image = preview.querySelector("img");
+    const height = card.frameHeight ?? framing.initialHeight;
+    preview.style.aspectRatio = `${card.width} / ${height}`;
+    preview.style.width = `${Math.min(400, Math.max(1, card.width / height * 180))}px`;
+    image.style.objectFit = card.frameHeight === undefined ? "contain" : "cover";
+    setImageFrameStyle(image, card);
+  }
+
+  function currentFraming() {
+    if (!framingCard || framingCard.owner !== account || !currentBoard() ||
+        currentCanvas() !== framingCard.board || !framingCard.board.cards.includes(framingCard.card)) {
+      $("#image-frame-dialog").close();
+      framingCard = null;
+      showToast("O quadro mudou. Abra novamente o enquadramento.");
+      return null;
+    }
+    return framingCard;
+  }
+
+  for (const selector of ["#image-frame-zoom", "#image-frame-x", "#image-frame-y"]) {
+    $(selector).addEventListener("input", () => {
+      const framing = currentFraming();
+      if (!framing) return;
+      const card = framing.card;
+      card.frameHeight = card.frameHeight ?? framing.initialHeight;
+      card.frameZoom = Number($("#image-frame-zoom").value) / 100;
+      card.frameX = Number($("#image-frame-x").value);
+      card.frameY = Number($("#image-frame-y").value);
+      applyImageFrame(card, cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`));
+      updateFramePreview(framing);
+      renderConnections();
+      save();
+    });
+  }
+  $("#image-frame-reset").addEventListener("click", () => {
+    const framing = currentFraming();
+    if (!framing) return;
+    delete framing.card.frameHeight;
+    delete framing.card.frameZoom;
+    delete framing.card.frameX;
+    delete framing.card.frameY;
+    $("#image-frame-zoom").value = "100";
+    $("#image-frame-x").value = "50";
+    $("#image-frame-y").value = "50";
+    applyImageFrame(framing.card, cardsElement.querySelector(`[data-card-id="${CSS.escape(framing.card.id)}"]`));
+    updateFramePreview(framing);
+    renderConnections();
+    save();
+  });
+  $("#image-frame-close").addEventListener("click", () => $("#image-frame-dialog").close());
+  $("#image-frame-dialog").addEventListener("close", () => { framingCard = null; });
 
   function formatFileSize(size) {
     if (size < 1024) return `${size} B`;
@@ -1265,6 +1363,7 @@
 
   function updateTransform() {
     world.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
+    world.style.setProperty("--control-scale", 1 / zoom);
     $("#zoom-level").textContent = `${Math.round(zoom * 100)}%`;
   }
 
@@ -1712,6 +1811,18 @@
     const action = event.target.closest("[data-action]");
     if (action) {
       event.stopPropagation();
+      const card = currentCanvas().cards.find((item) => item.id === cardId);
+      if (!card) return;
+      if (action.dataset.action === "frame" && card.type === "image") openImageFrame(card, cardElement);
+      if (action.dataset.action === "text-smaller" || action.dataset.action === "text-larger") {
+        const scale = Number.isFinite(card.textScale) ? card.textScale : 1;
+        const direction = action.dataset.action === "text-larger" ? 0.1 : -0.1;
+        card.textScale = Math.min(3, Math.max(0.5, Math.round((scale + direction) * 10) / 10));
+        cardElement.style.setProperty("--text-scale", card.textScale);
+        cardElement.setAttribute("data-text-scaled", "");
+        renderConnections();
+        save();
+      }
       if (action.dataset.action === "delete") removeCard(cardId);
       if (action.dataset.action === "connect") { setMode("connect"); connectCard(cardId); }
       if (action.dataset.action === "open-folder" && mode !== "connect") {
@@ -1758,7 +1869,7 @@
   viewport.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     if (event.pointerType === "touch" && canvasTouches.size < 2 && ["select", "hand"].includes(mode) &&
-        !event.target.closest("[data-action], [contenteditable], video, .attachment-download, [data-resize-shape]")) {
+        !event.target.closest("[data-action], [contenteditable], video, .attachment-download, [data-resize-shape], [data-resize-item]")) {
       canvasTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (canvasTouches.size === 2 && interaction && ["pan", "card"].includes(interaction.type)) {
         finishInteraction({ type: "pointercancel", pointerId: interaction.pointerId });
@@ -1819,6 +1930,11 @@
       updateSelectionVisual();
       if (event.target.closest("[data-resize-shape]") && card.type === "shape") {
         interaction = { type: "resize", pointerId: event.pointerId, card, element: cardElement, startX: event.clientX, startY: event.clientY, width: card.width, height: card.height };
+      } else if (event.target.closest("[data-resize-item]")) {
+        const frame = cardElement.querySelector(".image-frame");
+        interaction = { type: "resize-item", pointerId: event.pointerId, card, element: cardElement,
+          startX: event.clientX, startY: event.clientY, width: card.width,
+          frameHeight: card.frameHeight, initialFrameHeight: frame?.offsetHeight, mediaResized: card.mediaResized };
       } else {
         const items = currentCanvas().cards.filter((item) => selectedIds.has(item.id)).map((item) => ({
           card: item, x: item.x, y: item.y, element: cardsElement.querySelector(`[data-card-id="${CSS.escape(item.id)}"]`)
@@ -1866,6 +1982,20 @@
       interaction.element.style.width = `${interaction.card.width}px`;
       interaction.element.style.height = `${interaction.card.height}px`;
       renderConnections();
+    } else if (interaction.type === "resize-item") {
+      if (dx === 0 && dy === 0) return;
+      if (account) accountEpoch += 1;
+      interaction.card.width = Math.max(100, Math.round(interaction.width + dx / zoom));
+      interaction.element.style.width = `${interaction.card.width}px`;
+      if (interaction.card.type === "video") {
+        interaction.card.mediaResized = true;
+        interaction.element.setAttribute("data-media-resized", "");
+      }
+      if (interaction.card.type === "image") {
+        interaction.card.frameHeight = Math.max(40, Math.round(interaction.initialFrameHeight + dy / zoom));
+        applyImageFrame(interaction.card, interaction.element);
+      }
+      renderConnections();
     } else {
       interaction.end = worldPoint(event);
       if (interaction.type === "draw") {
@@ -1881,10 +2011,17 @@
     $("#selection-area").hidden = true;
     if (active.preview) active.preview.remove();
     const cancelled = event.type === "pointercancel";
-    if (active.type === "card" || active.type === "resize") {
+    if (active.type === "card" || active.type === "resize" || active.type === "resize-item") {
       if (cancelled) {
         if (active.type === "card") active.items.forEach((item) => { item.card.x = item.x; item.card.y = item.y; });
-        else { active.card.width = active.width; active.card.height = active.height; }
+        else if (active.type === "resize") { active.card.width = active.width; active.card.height = active.height; }
+        else {
+          active.card.width = active.width;
+          if (active.frameHeight === undefined) delete active.card.frameHeight;
+          else active.card.frameHeight = active.frameHeight;
+          if (active.mediaResized === undefined) delete active.card.mediaResized;
+          else active.card.mediaResized = active.mediaResized;
+        }
         renderCards();
       } else save();
     } else if (!cancelled && active.type === "area") {
@@ -1953,7 +2090,7 @@
     }, 150);
   });
   document.addEventListener("keydown", (event) => {
-    if (!currentBoard()) return;
+    if (!currentBoard() || $("#image-frame-dialog").open) return;
     if (event.key === "Escape") { setMode("select"); selectedId = null; selectedIds.clear(); renderCards(); }
     if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedIds.size) && !event.target.isContentEditable && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) {
       event.preventDefault(); deleteSelection();

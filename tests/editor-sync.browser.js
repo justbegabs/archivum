@@ -73,6 +73,16 @@ window.runEditorSyncTests = async function () {
     document.querySelector('[data-open-board="board"]').click();
     await wait(() => Boolean(document.querySelector('[data-media-id="image"]')?.src.startsWith("blob:")), "Anexo não foi aberto.");
     assert(document.querySelector(".rich-text")?.innerHTML.includes("<b>Texto</b>"), "Formatação não foi preservada.");
+    const imageCard = document.querySelector('[data-card-id="image"]');
+    imageCard.click();
+    imageCard.querySelector('[data-action="frame"]').click();
+    const frameZoom = document.querySelector("#image-frame-zoom");
+    frameZoom.value = "150";
+    frameZoom.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#image-frame-close").click();
+    await wait(() => row().board.cards[0].frameZoom === 1.5, "Enquadramento não foi enviado à nuvem simulada.");
+    assert(row().board.cards[0].imageId === "image" && await row().files.get("image").text() === "imagem",
+      "Enquadramento alterou o arquivo original.");
     setTitle("Salvo pelo editor");
     await wait(() => row().board.title === "Salvo pelo editor", "Edição não foi enviada.");
 
