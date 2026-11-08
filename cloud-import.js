@@ -21,11 +21,16 @@
       if (snapshot.missing.length) {
         throw new Error(`${snapshot.missing.length} arquivo(s) referenciado(s) não foram encontrados. Nenhum quadro foi enviado.`);
       }
+      status.textContent = "Gerando backup antes da importação. Confira o download antes de confirmar.";
+      const backup = await window.entrelinhasLocalData.downloadBackup();
+      if (backup.warnings.length || backup.localStorage.value !== snapshot.raw) {
+        throw new Error("O backup contém alertas ou os dados locais mudaram. Confira o backup e tente novamente.");
+      }
       const message = `Enviar uma cópia de ${snapshot.boards.length} quadro(s) e ${snapshot.referenced} arquivo(s) referenciado(s) para a conta conectada?\n\n` +
         `${snapshot.unreferenced} arquivo(s) sem referência não serão enviados e permanecerão no dispositivo. ` +
         "Feche outras abas e não edite durante o envio. Confira seu backup antes de continuar.\n\n" +
-        "Este envio experimental não permite abrir ou sincronizar os quadros em outro dispositivo. " +
-        "Ele exige que o esquema e as políticas tenham sido revisados e instalados. Os dados locais não serão apagados.";
+        "Confirme apenas se já baixou e conferiu o backup dos dados locais anteriores ao login. " +
+        "O envio exige que o esquema e as políticas tenham sido revisados e instalados. Os dados locais não serão apagados.";
       if (!window.confirm(message)) {
         status.textContent = "Envio cancelado. Nenhum dado foi enviado.";
         return;
@@ -48,7 +53,8 @@
       }
       status.textContent = `${snapshot.boards.length} cópia(s) de quadro verificadas na nuvem. ` +
         `${snapshot.unreferenced} arquivo(s) sem referência permanecem apenas neste dispositivo. ` +
-        "A sincronização e a abertura em outro dispositivo ainda não estão disponíveis.";
+        "A conta conectada será atualizada pelo editor; diferenças são tratadas como conflitos.";
+      window.dispatchEvent?.(new CustomEvent("entrelinhas-imported"));
     } catch (error) {
       console.error("Falha ao enviar cópias dos quadros:", error);
       status.textContent = `Envio interrompido: ${error.message} Dados locais preservados.` +

@@ -54,7 +54,7 @@
           if (value.revision !== row.revision) {
             throw new Error("Um quadro mudou durante a consulta. Tente sincronizar novamente.");
           }
-          remote.push(value);
+          remote.push({ ...value, remoteId: row.id });
         }
         await checkSession(ownerId);
         const actions = reconcile.plan(snapshot.baseline, snapshot.boards, remote);
@@ -68,7 +68,7 @@
           const board = localById.get(id);
           const cloud = remoteById.get(id);
           if (action === "conflict" || action === "remote-missing") {
-            results.push({ id, action: "conflict", reason: action });
+            results.push({ id, action: "conflict", reason: action, remote: cloud });
             continue;
           }
 
@@ -76,7 +76,7 @@
           const deletionBoard = action === "delete-remote" ? baseById.get(id)?.board : null;
           if (board || deletionBoard) localFiles = await adapter.files(ownerId, board || deletionBoard);
           if (cloud && (board || deletionBoard) && !await checkSharedFiles(localFiles, cloud.files)) {
-            results.push({ id, action: "conflict", reason: "file-mismatch" });
+            results.push({ id, action: "conflict", reason: "file-mismatch", remote: cloud });
             continue;
           }
 

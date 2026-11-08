@@ -25,7 +25,12 @@ function setup(options = {}) {
     } },
     entrelinhasLocalData: {
       async capture() { return snapshot; },
-      async isUnchanged() { return !options.changed; }
+      async isUnchanged() { return !options.changed; },
+      async downloadBackup() {
+        state.backups = (state.backups || 0) + 1;
+        if (options.backupFail) throw new Error("Falha no backup");
+        return { warnings: options.backupWarning ? ["arquivo ausente"] : [], localStorage: { value: "original" } };
+      }
     },
     EntrelinhasImportCore: { async importBoard(_client, owner, board) {
       state.imports.push([owner, board.id]);
@@ -47,8 +52,19 @@ test("confirma e envia cada quadro sem anunciar sincronização", async () => {
   assert.deepEqual(state.imports, [["owner", "a"], ["owner", "b"]]);
   assert.match(state.confirmText, /2 quadro/);
   assert.match(state.confirmText, /1 arquivo\(s\) sem referência/);
-  assert.match(status.textContent, /ainda não estão disponíveis/);
+  assert.match(status.textContent, /atualizada pelo editor/);
   assert.equal(button.disabled, false);
+  assert.equal(state.backups, 1);
+});
+
+test("não importa quando o backup falha ou contém alertas", async () => {
+  for (const options of [{ backupFail: true }, { backupWarning: true }]) {
+    const result = setup(options);
+    await result.button.click();
+    assert.equal(result.state.imports.length, 0);
+    assert.equal(result.state.confirms, 0);
+    assert.match(result.status.textContent, /backup/i);
+  }
 });
 
 test("cancelar ou arquivos ausentes não enviam dados", async () => {

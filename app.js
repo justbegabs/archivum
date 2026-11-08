@@ -6,6 +6,28 @@
   const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov"]);
   const mediaUrls = new Map();
   let mediaDatabase;
+  const accountStore = window.EntrelinhasAccountStore.create(indexedDB);
+  const accountAdapter = window.EntrelinhasAccountAdapter.create(
+    accountStore, () => window.entrelinhasCloudAuth.requireSession(),
+    (owner) => account === owner && (!syncing || syncEpoch === accountEpoch)
+  );
+  const accountEngine = window.EntrelinhasSyncEngine.create(accountAdapter);
+  let account = null;
+  let accountVersion = 0;
+  let accountEpoch = 0;
+  let accountQueue = Promise.resolve();
+  let syncTimer;
+  let syncing = false;
+  let resolvingConflict = false;
+  let syncEpoch = 0;
+  let syncBarrier = Promise.resolve();
+  let releaseSync;
+  let accountBlocked = false;
+  let sessionGeneration = 0;
+  let syncConflicts = [];
+  const tabId = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const $ = (selector) => document.querySelector(selector);
   const cardsElement = $("#cards");
   const linesElement = $("#connection-lines");
@@ -59,6 +81,12 @@
   }
 
   async function mediaOperation(operation, key, value) {
+    const owner = account;
+    if (owner) {
+      if (operation === "get") return accountStore.readFile(owner, key);
+      if (operation === "put") return accountStore.putFiles(owner, new Map([[key, value]]));
+      return;
+    }
     const database = await getMediaDatabase();
     return new Promise((resolve, reject) => {
       const transaction = database.transaction("images", operation === "get" ? "readonly" : "readwrite");
@@ -219,8 +247,40 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      status.textContent = "Salvo neste dispositivo";
+      if (account) {
+        const owner = account;
+        const snapshot = structuredClone(state);
+        const epoch = ++accountEpoch;
+        const journalKey = `entrelinhas-draft-v1:${owner}:${tabId}`;
+        localStorage.setItem(journalKey, JSON.stringify({ version: accountVersion, state: snapshot }));
+        status.textContent = "Salvo localmente";
+        if (accountBlocked) throw new Error("Sincronização bloqueada. O rascunho foi preservado neste navegador.");
+        const barrier = syncBarrier;
+        accountQueue = accountQueue.then(async () => {
+          await barrier;
+          if (accountBlocked) return;
+          if (account !== owner) throw new Error("A conta mudou; o rascunho foi preservado neste navegador.");
+          const record = await accountAdapter.saveDraft(owner, accountVersion, snapshot);
+          if (!record) throw new Error("Outra aba alterou os dados. O rascunho foi preservado; não feche esta aba.");
+          if (account !== owner) return;
+          accountVersion = record.version;
+          if (epoch === accountEpoch) localStorage.removeItem(journalKey);
+        }).catch((error) => {
+          console.error("Falha ao persistir rascunho:", error);
+          if (account === owner) {
+            status.textContent = `Erro local: ${error.message}`;
+            status.parentElement.classList.add("error");
+            accountBlocked = true;
+            const prefix = `entrelinhas-draft-v1:${owner}:`;
+            renderRecovery(Object.keys(localStorage).filter((key) => key.startsWith(prefix)));
+            showToast("Rascunho preservado. Abra a página inicial para recuperá-lo.");
+          }
+        });
+        scheduleSync();
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        status.textContent = "Salvo localmente";
+      }
       status.parentElement.classList.remove("error");
       return true;
     } catch (error) {
@@ -232,6 +292,154 @@
     }
   }
 
+  function scheduleSync(delay = 1200) {
+    clearTimeout(syncTimer);
+    if (account && !accountBlocked) syncTimer = setTimeout(syncAccount, delay);
+  }
+
+  function applyAccountState(record) {
+    state = { boards: structuredClone(record.boards), activeBoardId: record.activeBoardId, theme: record.theme };
+    renderAccountArchive(record.archive || []);
+    folderPath = [];
+    selectedId = null;
+    selectedIds.clear();
+    connectionStart = null;
+    for (const url of mediaUrls.values()) URL.revokeObjectURL(url);
+    mediaUrls.clear();
+    updateTheme();
+    renderBoards();
+    if (!currentBoard() || !$("#home").hidden) showHome();
+    else {
+      renderCards();
+      initialView();
+    }
+  }
+
+  async function syncAccount() {
+    if (!account || syncing || resolvingConflict || accountBlocked) return;
+    if (interaction || document.activeElement?.isContentEditable) {
+      scheduleSync(3000);
+      return;
+    }
+    const owner = account;
+    await accountQueue;
+    if (account !== owner || accountBlocked || syncing) return;
+    syncing = true;
+    syncBarrier = new Promise((resolve) => { releaseSync = resolve; });
+    syncEpoch = accountEpoch;
+    const syncStartBoards = window.EntrelinhasImportCore.canonical(state.boards);
+    status.textContent = navigator.onLine ? "Sincronizando" : "Offline";
+    try {
+      const results = await accountEngine.run(owner);
+      if (account !== owner) return;
+      const record = await accountStore.read(owner);
+      if (syncEpoch !== accountEpoch) {
+        if (window.EntrelinhasImportCore.canonical(record.boards) !== syncStartBoards) {
+          accountBlocked = true;
+          throw new Error("O quadro mudou durante a sincronização. O rascunho foi preservado; recupere-o antes de continuar.");
+        }
+        accountVersion = record.version;
+        status.textContent = "Salvo localmente";
+        return;
+      }
+      accountVersion = record.version;
+      if (window.EntrelinhasImportCore.canonical(state.boards) !==
+          window.EntrelinhasImportCore.canonical(record.boards) ||
+          state.activeBoardId !== record.activeBoardId || state.theme !== record.theme) {
+        applyAccountState(record);
+      } else {
+        renderAccountArchive(record.archive);
+      }
+      const conflicts = results.filter((result) => result.action === "conflict");
+      syncConflicts = conflicts;
+      renderSyncConflicts();
+      if (conflicts.length) {
+        status.textContent = `Conflito: ${conflicts.length} quadro(s)`;
+        status.parentElement.classList.add("error");
+      } else {
+        status.textContent = "Salvo na nuvem";
+        status.parentElement.classList.remove("error");
+      }
+    } catch (error) {
+      console.error("Falha na sincronização:", error);
+      if (account === owner) {
+        if (syncEpoch !== accountEpoch) {
+          try {
+            const record = await accountStore.read(owner);
+            if (account !== owner) return;
+            if (window.EntrelinhasImportCore.canonical(record.boards) === syncStartBoards) {
+              accountVersion = record.version;
+            } else {
+              accountBlocked = true;
+            }
+          } catch (readError) {
+            console.error("Falha ao verificar rascunho local:", readError);
+            accountBlocked = true;
+          }
+          if (accountBlocked) {
+            const prefix = `entrelinhas-draft-v1:${owner}:`;
+            renderRecovery(Object.keys(localStorage).filter((key) => key.startsWith(prefix)));
+          }
+        }
+        status.textContent = navigator.onLine ? `Não sincronizado: ${error.message}` : "Offline — salvo localmente";
+        status.parentElement.classList.add("error");
+      }
+    } finally {
+      syncing = false;
+      releaseSync();
+      if (account && !accountBlocked) scheduleSync(account !== owner ? 0 : syncEpoch !== accountEpoch ? 1200 : 15000);
+    }
+  }
+
+  async function changeAccount(owner) {
+    if (owner === account) return;
+    const generation = ++sessionGeneration;
+    clearTimeout(syncTimer);
+    syncConflicts = [];
+    renderSyncConflicts();
+    $("#sync-recovery").hidden = true;
+    document.querySelector(".app").inert = true;
+    account = owner;
+    accountQueue = Promise.resolve();
+    accountBlocked = false;
+    accountEpoch += 1;
+    state = { boards: [], activeBoardId: null };
+    applyAccountState({ boards: [], activeBoardId: null, theme: "light" });
+    if (!owner) {
+      state = { boards: [initialBoard], activeBoardId: initialBoard.id };
+      load();
+      applyAccountState(state);
+      status.textContent = "Salvo localmente";
+      document.querySelector(".app").inert = false;
+      return;
+    }
+    status.textContent = "Carregando conta";
+    try {
+      const record = await accountStore.read(owner);
+      if (generation !== sessionGeneration) return;
+      const prefix = `entrelinhas-draft-v1:${owner}:`;
+      const pending = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
+      accountVersion = record.version;
+      applyAccountState(record);
+      document.querySelector(".app").inert = false;
+      if (pending.length) {
+        accountBlocked = true;
+        status.textContent = "Rascunho pendente em outra aba ou sessão. Dados preservados.";
+        status.parentElement.classList.add("error");
+        renderRecovery(pending);
+        return;
+      }
+      scheduleSync(0);
+    } catch (error) {
+      console.error("Falha ao carregar conta:", error);
+      if (generation === sessionGeneration) {
+        accountBlocked = true;
+        document.querySelector(".app").inert = false;
+        status.textContent = `Não foi possível carregar a conta: ${error.message}`;
+        status.parentElement.classList.add("error");
+      }
+    }
+  }
   function load() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -246,6 +454,235 @@
       status.textContent = "Erro ao carregar dados";
       status.parentElement.classList.add("error");
       showToast("Não foi possível carregar seus quadros salvos.");
+    }
+  }
+
+  function renderRecovery(keys) {
+    const container = $("#sync-recovery");
+    container.hidden = false;
+    container.replaceChildren();
+    const text = document.createElement("p");
+    text.textContent = "Há rascunhos pendentes desta conta. Feche outras abas do site antes de recuperar. Os quadros serão adicionados como cópias; nada será sobrescrito.";
+    container.append(text);
+    for (const key of keys) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "backup-button";
+      button.textContent = "Recuperar rascunho como cópias";
+      button.addEventListener("click", () => recoverDraft(key));
+      container.append(button);
+    }
+  }
+
+  function renderAccountArchive(archive) {
+    const container = $("#sync-archive");
+    container.hidden = !account || !archive.length;
+    container.replaceChildren();
+    if (container.hidden) return;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `Versões arquivadas (${archive.length})`;
+    details.append(summary);
+    archive.forEach((entry, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "backup-button";
+      button.textContent = `Restaurar cópia: ${entry.board.title} — ${entry.reason}`;
+      button.addEventListener("click", () => restoreArchived(index, entry));
+      details.append(button);
+    });
+    container.append(details);
+  }
+
+  async function restoreArchived(index, entry) {
+    const owner = account;
+    const epoch = accountEpoch;
+    if (!owner || accountBlocked || syncing || resolvingConflict) {
+      showToast("Aguarde a sincronização antes de restaurar.");
+      return;
+    }
+    if (!window.confirm("Restaurar esta versão como um novo quadro?")) return;
+    resolvingConflict = true;
+    try {
+      await accountQueue;
+      await accountAdapter.files(owner, entry.board);
+      if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
+      const record = await accountStore.update(owner, accountVersion, (data) => {
+        if (account !== owner || epoch !== accountEpoch ||
+            window.EntrelinhasImportCore.canonical(data.archive[index]) !== window.EntrelinhasImportCore.canonical(entry)) {
+          throw new Error("O arquivo local mudou.");
+        }
+        const copy = structuredClone(entry.board);
+        copy.id = id();
+        copy.title += " (restaurado)";
+        data.boards.push(copy);
+        if (!data.activeBoardId) data.activeBoardId = copy.id;
+        return data;
+      });
+      if (!record) throw new Error("A conta mudou em outra aba.");
+      if (account !== owner || epoch !== accountEpoch) {
+        accountBlocked = true;
+        throw new Error("A conta ou o quadro mudou; o rascunho local foi preservado.");
+      }
+      accountVersion = record.version;
+      applyAccountState(record);
+    } catch (error) {
+      console.error("Falha ao restaurar versão arquivada:", error);
+      status.textContent = `Não foi possível restaurar: ${error.message}`;
+      status.parentElement.classList.add("error");
+    } finally {
+      resolvingConflict = false;
+      if (account && !accountBlocked) scheduleSync(1500);
+    }
+  }
+
+  async function recoverDraft(key) {
+    const owner = account;
+    if (!owner || !key.startsWith(`entrelinhas-draft-v1:${owner}:`)) return;
+    if (!window.confirm("Feche todas as outras abas deste site. Recuperar os quadros deste rascunho como cópias?")) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) throw new Error("O rascunho não está mais disponível.");
+      const draft = JSON.parse(raw);
+      if (!Array.isArray(draft.state?.boards) || !draft.state.boards.every((board) =>
+        board && typeof board.id === "string" && typeof board.title === "string" &&
+        Array.isArray(board.cards) && Array.isArray(board.connections))) {
+        throw new Error("Rascunho inválido; ele foi preservado.");
+      }
+      const current = await accountStore.read(owner);
+      for (const board of draft.state.boards) await accountAdapter.files(owner, board);
+      if (account !== owner || localStorage.getItem(key) !== raw) throw new Error("A conta ou o rascunho mudou.");
+      const result = await accountStore.update(owner, current.version, (data) => {
+        if (account !== owner || localStorage.getItem(key) !== raw) throw new Error("A conta ou o rascunho mudou.");
+        for (const board of draft.state.boards) {
+          const copy = structuredClone(board);
+          copy.id = id();
+          copy.title += " (rascunho recuperado)";
+          data.boards.push(copy);
+        }
+        if (!data.activeBoardId) data.activeBoardId = data.boards[0]?.id || null;
+        return data;
+      });
+      if (!result) throw new Error("A conta foi alterada por outra aba. Tente novamente.");
+      if (account !== owner || localStorage.getItem(key) !== raw) throw new Error("A conta ou o rascunho mudou; o original foi mantido.");
+      localStorage.removeItem(key);
+      accountVersion = result.version;
+      applyAccountState(result);
+      const prefix = `entrelinhas-draft-v1:${owner}:`;
+      const remaining = Object.keys(localStorage).filter((item) => item.startsWith(prefix));
+      accountBlocked = remaining.length > 0;
+      if (remaining.length) renderRecovery(remaining);
+      else {
+        $("#sync-recovery").hidden = true;
+        status.textContent = "Rascunho recuperado localmente";
+        scheduleSync(0);
+      }
+    } catch (error) {
+      console.error("Falha ao recuperar rascunho:", error);
+      status.textContent = `Não foi possível recuperar: ${error.message}`;
+      status.parentElement.classList.add("error");
+    }
+  }
+
+  function renderSyncConflicts() {
+    const container = $("#sync-conflicts");
+    container.replaceChildren();
+    container.hidden = !syncConflicts.length;
+    if (!syncConflicts.length) return;
+    const heading = document.createElement("strong");
+    heading.textContent = "Conflitos de sincronização";
+    container.append(heading);
+    for (const conflict of syncConflicts) {
+      const local = state.boards.find((board) => board.id === conflict.id);
+      const title = document.createElement("h3");
+      title.textContent = local?.title || conflict.remote?.board.title || conflict.id;
+      const info = document.createElement("p");
+      info.textContent = conflict.reason === "remote-missing"
+        ? "O quadro remoto está indisponível. Nenhum dado foi alterado; verifique a conexão e o acesso."
+        : "Compare as versões antes de escolher. A versão não escolhida será arquivada localmente.";
+      container.append(title, info);
+      if (!conflict.remote) continue;
+      for (const [label, board] of [["Local", local], ["Nuvem", conflict.remote.deleted ? null : conflict.remote.board]]) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = `${label}: ${board?.title || "quadro excluído"}`;
+        const content = document.createElement("pre");
+        content.className = "cloud-board-json";
+        content.textContent = board ? JSON.stringify(board, null, 2) : "Quadro excluído";
+        details.append(summary, content);
+        container.append(details);
+      }
+      for (const [choice, label] of [["local", "Manter local"], ["remote", "Manter nuvem"], ["both", "Preservar ambas"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "backup-button";
+        button.textContent = label;
+        button.addEventListener("click", () => resolveConflict(conflict, choice));
+        container.append(button);
+      }
+    }
+  }
+
+  async function resolveConflict(conflict, choice) {
+    const owner = account;
+    const epoch = accountEpoch;
+    if (!owner || accountBlocked || syncing || resolvingConflict) {
+      showToast("Aguarde a sincronização antes de resolver o conflito.");
+      return;
+    }
+    if (!window.confirm("Confirmar esta escolha? A outra versão será arquivada localmente.")) return;
+    resolvingConflict = true;
+    try {
+      await accountQueue;
+      const { client, userId } = await window.entrelinhasCloudAuth.requireSession();
+      if (userId !== owner || account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
+      const remote = await window.EntrelinhasImportCore.loadBoard(client, owner, conflict.remote.remoteId);
+      if (remote.revision !== conflict.remote.revision ||
+          window.EntrelinhasImportCore.canonical(remote.board) !== window.EntrelinhasImportCore.canonical(conflict.remote.board) ||
+          remote.deleted !== conflict.remote.deleted) {
+        throw new Error("A versão na nuvem mudou. Sincronize novamente antes de escolher.");
+      }
+      await accountStore.putFiles(owner, remote.files);
+      if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
+      const result = await accountStore.update(owner, accountVersion, (data) => {
+        if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou.");
+        const local = data.boards.find((board) => board.id === conflict.id);
+        const visible = state.boards.find((board) => board.id === conflict.id);
+        if (window.EntrelinhasImportCore.canonical(local) !== window.EntrelinhasImportCore.canonical(visible)) {
+          throw new Error("O quadro local mudou. Tente novamente.");
+        }
+        data.archive.push({ board: remote.board, revision: remote.revision, reason: "versão remota antes da resolução" });
+        if (local) data.archive.push({ board: local, reason: "versão local antes da resolução" });
+        if (choice !== "local") {
+          data.boards = data.boards.filter((board) => board.id !== conflict.id);
+          if (!remote.deleted) data.boards.push(remote.board);
+          if (choice === "both" && local) {
+            const copy = structuredClone(local);
+            copy.id = id();
+            copy.title += " (cópia local)";
+            data.boards.push(copy);
+          }
+        }
+        data.baseline = data.baseline.filter((entry) => entry.board.id !== conflict.id);
+        data.baseline.push({ board: remote.board, revision: remote.revision, deleted: remote.deleted });
+        if (!data.boards.some((board) => board.id === data.activeBoardId)) data.activeBoardId = data.boards[0]?.id || null;
+        return data;
+      });
+      if (!result) throw new Error("Os dados locais mudaram. Tente novamente.");
+      if (account !== owner || epoch !== accountEpoch) throw new Error("A conta ou o quadro mudou; confira o rascunho local.");
+      accountVersion = result.version;
+      applyAccountState(result);
+      syncConflicts = syncConflicts.filter((item) => item.id !== conflict.id);
+      renderSyncConflicts();
+      scheduleSync(0);
+    } catch (error) {
+      console.error("Falha ao resolver conflito:", error);
+      if (account === owner && epoch !== accountEpoch) accountBlocked = true;
+      status.textContent = `Conflito não resolvido: ${error.message}`;
+      status.parentElement.classList.add("error");
+    } finally {
+      resolvingConflict = false;
+      if (account && !accountBlocked) scheduleSync(1500);
     }
   }
 
@@ -1021,6 +1458,19 @@
     if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedIds.size) && !event.target.isContentEditable && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) {
       event.preventDefault(); deleteSelection();
     }
+  });
+
+  window.addEventListener("entrelinhas-session", (event) => {
+    changeAccount(event.detail.userId).catch((error) => {
+      console.error("Falha ao trocar de conta:", error);
+      status.textContent = `Erro ao trocar de conta: ${error.message}`;
+      status.parentElement.classList.add("error");
+    });
+  });
+  window.addEventListener("online", () => scheduleSync(0));
+  window.addEventListener("entrelinhas-imported", () => scheduleSync(0));
+  window.addEventListener("offline", () => {
+    if (account) status.textContent = "Offline — salvo localmente";
   });
 
   load();

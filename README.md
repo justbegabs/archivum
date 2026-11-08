@@ -17,12 +17,12 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - No celular, arraste uma área vazia para navegar pelo quadro sem reduzir o texto; use o botão de centralizar para visualizar todas as notas.
 - Crie outros quadros na barra lateral. O botão de download exporta o quadro atual em JSON.
 - Clique em **entrelinhas** para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
-- Na página inicial, use **Excluir quadro** e confirme para remover um quadro e seu conteúdo deste navegador. A exclusão não pode ser desfeita; faça um backup antes. Capas e anexos permanecem no IndexedDB e continuam incluídos no backup completo, mesmo sem referência.
-- Antes de migrar, use **Backup completo** para baixar um JSON com o estado original e todos os arquivos do IndexedDB, incluindo arquivos sem referência. Abra o site na mesma origem e navegador em que os dados foram criados; `localhost` e GitHub Pages não compartilham armazenamento. Feche outras abas e não edite enquanto o backup é gerado. Confira o download e os eventuais alertas de arquivos ausentes. Não há restauração automática implementada.
+- Na página inicial, use **Excluir quadro** e confirme para removê-lo. Sem login, a exclusão do quadro não pode ser desfeita; faça um backup antes. Com login, uma versão é arquivada localmente e pode ser restaurada como cópia. O backup dos dados anteriores ao login inclui capas e anexos do IndexedDB antigo, mesmo sem referência.
+- **Backup local anterior** baixa um JSON com os quadros anteriores ao login e os arquivos do IndexedDB antigo, inclusive os sem referência. Ele não inclui os dados armazenados por conta. Não há restauração automática desse JSON.
 
 O backup contém dados privados em texto e anexos codificados em base64; guarde-o em local seguro. Arquivos grandes podem exigir bastante memória e espaço. Imagens que existem apenas como links externos permanecem como links; o conteúdo externo não é baixado. O backup preserva o texto original de `entrelinhas-boards-v1`, bem como identificadores, tipos, nomes, tamanhos, datas e hashes dos arquivos locais.
 
-Os quadros são salvos no armazenamento local do navegador e os arquivos anexados no IndexedDB, neste dispositivo. Limpar os dados do navegador pode apagá-los; não há sincronização entre dispositivos nem importação do JSON exportado. O arquivo exportado inclui os anexos e a capa, inclusive dentro das pastas; vídeos grandes podem gerar arquivos JSON muito grandes. A fonte e a imagem do quadro de exemplo são carregadas da internet quando disponíveis.
+Sem login, os quadros permanecem no armazenamento local antigo. Com login, o editor usa um armazenamento separado por conta e tenta sincronizá-lo com o Supabase. Limpar os dados do navegador pode apagar rascunhos ainda não enviados. Não há importação do JSON exportado. A fonte e a imagem do quadro de exemplo são carregadas da internet quando disponíveis.
 
 ## Preparação do Supabase
 
@@ -35,19 +35,17 @@ solicitado, e será apresentada para revisão antes de qualquer execução.
 
 O arquivo legado [supabase-setup.sql](supabase-setup.sql) prepara tabelas, convites por e-mail confirmado, regras de acesso, um bucket privado e notificações de alterações. Ele não deve ser executado para habilitar o novo compartilhamento seguro. O script interrompe a operação se o bucket existente for público. Os limites de upload dependem também da configuração e do plano do Supabase.
 
-Essa preparação **não integra os quadros à nuvem**: migração dos quadros locais, CRUD remoto, interface de convites, sincronização e tratamento de conflitos ainda precisam ser implementados. Convites são registros de permissão; o script não envia e-mails. A futura integração deve armazenar arquivos em `<id-do-quadro>/<nome-do-arquivo>`, usar `entrelinhas_save_board` com a revisão atual e tratar conflitos sem perder alterações. Não use a chave secreta ou `service_role` no navegador.
+O esquema legado não implementa a sincronização privada atual nem envia e-mails. Não use a chave secreta ou `service_role` no navegador.
 
-O botão **Entrar com Google** inicia a autenticação no projeto Supabase configurado; **Sair** encerra a sessão. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. A sessão usa o armazenamento do Supabase no navegador. A autenticação, por si só, **não envia nem sincroniza quadros**. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) complementa o script anterior e não é executada automaticamente; a exclusão de objetos no Storage ainda precisa ser tratada pela futura integração.
+O botão **Entrar com Google** inicia a autenticação no projeto Supabase configurado; **Sair** encerra a sessão. Abra o site por HTTP(S) e autorize o endereço completo em Authentication → URL Configuration. O SDK é carregado pela internet. A migração [202611080001_owner_board_delete.sql](migrations/202611080001_owner_board_delete.sql) pertence ao esquema legado e não é executada automaticamente.
 
 Na página inicial, **Verificar dados locais** informa o número de quadros, arquivos referenciados, arquivos disponíveis e arquivos sem referência, além de alertar sobre referências ausentes. A verificação é somente leitura.
 
 ## Colaboração em tempo real
 
-A colaboração em tempo real ainda não está implementada. O editor usa apenas
-armazenamento local; a publicação Realtime e a função de revisão no script
-legado, por si só, não conectam o editor nem fornecem o compartilhamento seguro.
-Também não há fila offline de operações, histórico remoto ou resolução de
-conflitos.
+A colaboração simultânea entre usuários ainda não está implementada. A
+sincronização privada usa consultas periódicas, não Realtime nem edição
+colaborativa de texto.
 
 Para edição simultânea do mesmo campo de texto, uma substituição do HTML
 completo não permite mesclar alterações concorrentes com segurança. Um CRDT
@@ -57,12 +55,7 @@ integração ser validada, edições concorrentes no mesmo campo devem ser
 tratadas como conflito explícito, preservando as duas versões, em vez de
 selecionar silenciosamente a última gravação.
 
-A implementação depende primeiro de quadros e anexos na nuvem, migração
-verificada sem apagar os dados locais e permissões de proprietário, editor e
-visualizador efetivas também no Storage. Depois, será necessário persistir
-rascunhos e alterações pendentes por usuário e quadro, comparar revisões no
-servidor, recuperar alterações perdidas na reconexão e manter versões
-recuperáveis. Nenhum desses mecanismos é ativado por este documento.
+O compartilhamento seguro e permissões de colaborador continuam fora do escopo.
 
 Como preparação para a sincronização entre dispositivos, a migração
 [202611080002_private_sync_foundation.sql](migrations/202611080002_private_sync_foundation.sql)
@@ -77,7 +70,7 @@ aplicada após a revisão das políticas existentes de
 privado e as duas políticas de arquivos. Isso não substitui testes reais de
 acesso entre contas: uma política permissiva adicional pode conceder acesso
 indevido. A migração cria objetos novos e não deve ser executada novamente
-no mesmo projeto. O editor ainda não abre nem sincroniza os quadros remotos.
+no mesmo projeto.
 
 Para repetir o teste SQL isolado, instale `@electric-sql/pglite` em um diretório
 de testes separado e defina a variável `PGLITE_PACKAGE_DIR` para o caminho
@@ -85,34 +78,35 @@ absoluto do pacote instalado. Depois execute
 `node --test tests\sync-migration.postgres.test.js`. O teste cria um banco
 descartável em memória e não se conecta ao Supabase.
 
-O botão experimental **Enviar cópia dos quadros** usa
+O botão **Enviar cópia dos quadros** gera um backup local e pede confirmação
+após conferência. Ele usa
 [sync-import-core.js](sync-import-core.js) para enviar quadros locais e seus
 arquivos referenciados após confirmação. Ele compara os dados locais,
 verifica os bytes no Storage e não sobrescreve uma cópia remota diferente.
 Arquivos sem referência continuam somente no dispositivo. Uma falha pode deixar
 objetos ou quadros parciais na nuvem; uma tentativa idêntica pode ser retomada.
 Os testes de envio usam serviços simulados; o acesso com contas reais ainda
-precisa ser validado antes do envio de dados. O botão não implementa abertura no
-outro dispositivo, sincronização de edições ou resolução de conflitos.
+precisa ser validado no Supabase real. Abra o site na mesma origem e navegador
+dos dados originais; `localhost` e GitHub Pages não compartilham armazenamento.
 
 **Consultar cópias na nuvem** lista cópias já enviadas para a conta conectada e
 permite visualizar seu JSON e baixar os arquivos verificados. Essa consulta é
 somente leitura: não abre o quadro no editor, não sincroniza alterações e exige
 o esquema no Supabase. Ela não altera os dados do navegador.
 
-[sync-reconcile.js](sync-reconcile.js) prepara um plano de reconciliação entre
-a última versão comum e as versões local e remota, identificando conflitos e
-ausências remotas sem sobrescrevê-las. Esse planejamento ainda não está
-conectado ao editor, não executa operações e não ativa a sincronização.
+O editor utiliza [sync-reconcile.js](sync-reconcile.js) e
+[sync-engine.js](sync-engine.js) para comparar revisões, verificar anexos e
+sincronizar alterações após edição, reconexão e consulta periódica. A exclusão
+é lógica e preserva documento e arquivos. Na página inicial, conflitos podem
+ser comparados em JSON e resolvidos com a versão local, a remota ou ambas.
+Versões anteriores são arquivadas no IndexedDB da conta e podem ser
+restauradas como cópias na página inicial. Conflitos em que o mesmo identificador de arquivo
+tem conteúdos diferentes não podem ser resolvidos automaticamente.
 
-[sync-engine.js](sync-engine.js) é uma preparação não ativada que usa esse
-plano para ler e gravar revisões, verificar arquivos e interromper operações
-quando a conta ou os dados locais mudam. A exclusão lógica preserva o documento
-e os anexos na nuvem e é controlada por revisão. Os módulos
-[sync-account-store.js](sync-account-store.js) e
-[sync-account-adapter.js](sync-account-adapter.js) fornecem persistência
-transacional separada por conta, anexos imutáveis e arquivamento de quadros
-excluídos. Esses módulos ainda não estão conectados ao editor, à migração nem
-a uma interface de resolução de conflitos. Os testes usam um servidor simulado
-e também verificam o IndexedDB em um navegador local. **Não carregue esses
-módulos no site como sincronização pronta.**
+Os dados da conta ficam em IndexedDB, com rascunhos temporários em localStorage.
+Se uma edição ocorrer durante uma sincronização ou houver conflito entre abas,
+o editor pode bloquear a sincronização e oferecer recuperação do rascunho como
+cópias: feche as outras abas antes de usá-la. Os testes do editor usam serviços
+simulados; login, políticas, transferência de arquivos e sincronização entre
+dispositivos ainda devem ser validados no Supabase real antes de depender deles.
+Os arquivos desta alteração ainda precisam ser publicados no GitHub Pages.

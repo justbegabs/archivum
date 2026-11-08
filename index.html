@@ -70,7 +70,7 @@
           <span class="save-status"><span></span><span id="save-status">Salvo neste dispositivo</span></span>
           <button class="backup-button" id="cloud-login" type="button" disabled>Entrar com Google</button>
           <button class="backup-button" id="cloud-logout" type="button" hidden>Sair</button>
-          <button class="backup-button" id="backup-all" type="button" title="Baixar backup de todos os quadros e arquivos">Backup completo</button>
+          <button class="backup-button" id="backup-all" type="button" title="Baixar backup dos quadros locais anteriores ao login">Backup local anterior</button>
           <button class="icon-button" id="theme-toggle" title="Ativar tema escuro" aria-label="Ativar tema escuro" aria-pressed="false"><svg class="icon"><use href="#i-moon"/></svg></button>
           <button class="icon-button export-button" id="export" title="Exportar quadro como JSON" aria-label="Exportar quadro"><svg class="icon"><use href="#i-export"/></svg></button>
           <div class="top-avatar" title="Seu espaço">V</div>
@@ -83,8 +83,11 @@
           <button class="primary-button" id="home-new-board"><svg class="icon"><use href="#i-plus"/></svg> Novo quadro</button>
         </div>
         <div class="home-section-heading"><div><h2>Seus quadros</h2><p>Escolha um quadro para continuar criando.</p></div><span id="home-board-count"></span></div>
-        <div class="migration-preflight"><strong>Preparar importação para a nuvem</strong><p>Faça e confira um backup antes de importar. O envio é experimental: não o use até que as políticas sejam revisadas e testadas. Ele ainda não ativa a sincronização entre dispositivos.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup completo</button><button class="backup-button" type="button" id="cloud-import">Enviar cópia dos quadros</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
-        <div class="migration-preflight"><strong>Consultar cópias na conta</strong><p>Consulta em formato JSON, somente leitura. Ainda não sincroniza alterações nem abre os quadros no editor.</p><button class="backup-button" id="cloud-list" type="button">Consultar cópias na nuvem</button><p id="cloud-list-status" role="status" aria-live="polite"></p><div id="cloud-board-list"></div><div id="cloud-board-detail"></div></div>
+        <div class="migration-preflight" id="sync-recovery" hidden></div>
+        <div class="migration-preflight" id="sync-conflicts" hidden></div>
+        <div class="migration-preflight" id="sync-archive" hidden></div>
+        <div class="migration-preflight"><strong>Importar quadros deste navegador</strong><p>Faça e confira um backup dos dados locais anteriores ao login antes de importar. Os originais permanecerão neste navegador. O acesso entre dispositivos ainda precisa de validação no projeto Supabase real.</p><div class="migration-actions"><button class="backup-button" id="inspect-migration" type="button">Verificar dados locais</button><button class="backup-button" type="button" id="migration-backup">Baixar backup local anterior</button><button class="backup-button" type="button" id="cloud-import">Enviar cópia dos quadros</button></div><p id="migration-status" role="status" aria-live="polite"></p></div>
+        <div class="migration-preflight"><strong>Consultar cópias na conta</strong><p>Consulta adicional em formato JSON, somente leitura.</p><button class="backup-button" id="cloud-list" type="button">Consultar cópias na nuvem</button><p id="cloud-list-status" role="status" aria-live="polite"></p><div id="cloud-board-list"></div><div id="cloud-board-detail"></div></div>
         <div class="home-grid" id="home-grid"></div>
         <input id="cover-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
       </section>
@@ -160,11 +163,15 @@
       <div class="cloud-status" id="cloud-status" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <script src="sync-import-core.js"></script>
+  <script src="sync-reconcile.js"></script>
+  <script src="sync-engine.js"></script>
+  <script src="sync-account-store.js"></script>
+  <script src="sync-account-adapter.js"></script>
   <script src="app.js"></script>
   <script src="backup.js"></script>
-  <script src="cloud-auth.js"></script>
-  <script src="sync-import-core.js"></script>
   <script src="cloud-import.js"></script>
   <script src="cloud-view.js"></script>
+  <script src="cloud-auth.js"></script>
 </body>
 </html>

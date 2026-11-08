@@ -7,7 +7,7 @@
 })(globalThis, function (core) {
   "use strict";
 
-  function create(store, session) {
+  function create(store, session, mayCommit = () => true) {
     async function files(ownerId, board) {
       const result = new Map();
       for (const key of core.references(board)) {
@@ -20,6 +20,7 @@
 
     async function commit(ownerId, version, change) {
       const record = await store.update(ownerId, version, (data) => {
+        if (!mayCommit(ownerId)) throw new Error("O editor mudou durante a sincronização.");
         const prior = data.boards.find((board) => board.id === change.id);
         if (change.remove) {
           if (!prior || !change.archive || core.canonical(prior) !== core.canonical(change.archive)) {

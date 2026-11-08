@@ -248,7 +248,7 @@
     };
   }
 
-  button.addEventListener("click", async () => {
+  async function downloadBackup() {
     button.disabled = true;
     report("Preparando backup. Mantenha esta aba aberta e não edite os quadros.");
     try {
@@ -265,11 +265,17 @@
       } else {
         report(`Backup gerado com ${backup.indexedDB.records.length} arquivo(s). Confira o download.`);
       }
+      return backup;
     } catch (error) {
       console.error("Falha ao gerar backup:", error);
       report(`Não foi possível gerar o backup: ${error.message}`, true);
+      throw error;
     } finally {
       button.disabled = false;
     }
+  }
+  window.entrelinhasLocalData.downloadBackup = downloadBackup;
+  button.addEventListener("click", () => {
+    downloadBackup().catch((error) => console.error("Backup não concluído:", error));
   });
 })();
