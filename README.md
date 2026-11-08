@@ -14,6 +14,7 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - No celular, arraste uma área vazia para navegar pelo quadro sem reduzir o texto; use o botão de centralizar para visualizar todas as notas.
 - Crie outros quadros na barra lateral. O botão de download exporta o quadro atual em JSON.
 - Clique em **entrelinhas** para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
+- Na página inicial, use **Excluir quadro** e confirme para remover um quadro e seu conteúdo deste navegador. A exclusão não pode ser desfeita; faça um backup antes. Capas e anexos permanecem no IndexedDB e continuam incluídos no backup completo, mesmo sem referência.
 - Antes de migrar, use **Backup completo** para baixar um JSON com o estado original e todos os arquivos do IndexedDB, incluindo arquivos sem referência. Abra o site na mesma origem e navegador em que os dados foram criados; `localhost` e GitHub Pages não compartilham armazenamento. Feche outras abas e não edite enquanto o backup é gerado. Confira o download e os eventuais alertas de arquivos ausentes. Não há restauração automática implementada.
 
 O backup contém dados privados em texto e anexos codificados em base64; guarde-o em local seguro. Arquivos grandes podem exigir bastante memória e espaço. Imagens que existem apenas como links externos permanecem como links; o conteúdo externo não é baixado. O backup preserva o texto original de `entrelinhas-boards-v1`, bem como identificadores, tipos, nomes, tamanhos, datas e hashes dos arquivos locais.

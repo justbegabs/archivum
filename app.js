@@ -236,7 +236,7 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
       const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed.boards) || !parsed.boards.length || !parsed.boards.every((board) => typeof board.id === "string" && typeof board.title === "string" && Array.isArray(board.cards) && Array.isArray(board.connections)) || !parsed.boards.some((board) => board.id === parsed.activeBoardId)) {
+      if (!Array.isArray(parsed.boards) || !parsed.boards.every((board) => typeof board.id === "string" && typeof board.title === "string" && Array.isArray(board.cards) && Array.isArray(board.connections)) || (parsed.boards.length ? !parsed.boards.some((board) => board.id === parsed.activeBoardId) : parsed.activeBoardId !== null)) {
         throw new Error("Dados de quadros inválidos");
       }
       state = parsed;
@@ -267,7 +267,7 @@
 
   function renderBoards() {
     $("#board-list").innerHTML = state.boards.map((board) => `<button class="board-item ${board.id === state.activeBoardId ? "active" : ""}" data-board-id="${escapeHTML(board.id)}" aria-label="${escapeHTML(board.title)}">${icon("grid")}<span>${escapeHTML(board.title)}</span></button>`).join("");
-    renderCanvasTitle();
+    if (currentBoard()) renderCanvasTitle();
   }
 
   function renderHome() {
@@ -278,6 +278,7 @@
         <div class="home-card-info"><div class="home-card-icon">${icon("grid")}</div><div><h3>${escapeHTML(board.title)}</h3><p>${board.cards.length} ${board.cards.length === 1 ? "item" : "itens"}</p></div>${icon("chevron")}</div>
       </button>
       <button class="cover-button" data-cover-board="${escapeHTML(board.id)}">${icon("image")} ${board.coverId ? "Alterar capa" : "Adicionar capa"}</button>
+      <button class="cover-button delete-board-button" type="button" data-delete-board="${escapeHTML(board.id)}" aria-label="Excluir quadro ${escapeHTML(board.title)}">${icon("trash")} Excluir quadro</button>
     </article>`).join("") + `<button class="home-create" id="home-create"><span>${icon("plus")}</span><strong>Criar novo quadro</strong><small>Um novo espaço para suas ideias</small></button>`;
     loadMedia($("#home-grid"));
   }
@@ -511,6 +512,27 @@
     selection.addRange(range);
   }
 
+  function deleteBoard(boardId) {
+    const board = state.boards.find((item) => item.id === boardId);
+    if (!board) return;
+    if (!window.confirm(`Excluir o quadro "${board.title}" e seu conteúdo deste navegador? Esta ação não pode ser desfeita. Os arquivos anexados permanecerão no armazenamento local.`)) return;
+    const previousBoards = state.boards;
+    const previousActiveBoardId = state.activeBoardId;
+    state.boards = state.boards.filter((item) => item.id !== boardId);
+    if (state.activeBoardId === boardId) state.activeBoardId = state.boards[0]?.id || null;
+    if (!save()) {
+      state.boards = previousBoards;
+      state.activeBoardId = previousActiveBoardId;
+      return;
+    }
+    folderPath = [];
+    selectedId = null;
+    connectionStart = null;
+    renderBoards();
+    showHome();
+    showToast("Quadro excluído deste navegador. Os arquivos foram preservados.");
+  }
+
   $("#new-board").addEventListener("click", createBoard);
   $("#new-board-secondary").addEventListener("click", createBoard);
   $("#home-new-board").addEventListener("click", createBoard);
@@ -518,8 +540,10 @@
   $("#home-grid").addEventListener("click", (event) => {
     const open = event.target.closest("[data-open-board]");
     const cover = event.target.closest("[data-cover-board]");
+    const remove = event.target.closest("[data-delete-board]");
     if (open) openBoard(open.dataset.openBoard);
     if (cover) { coverBoardId = cover.dataset.coverBoard; $("#cover-input").click(); }
+    if (remove) deleteBoard(remove.dataset.deleteBoard);
     if (event.target.closest("#home-create")) createBoard();
   });
   $("#cover-input").addEventListener("change", async (event) => {
@@ -530,6 +554,10 @@
     if (!file || !board) return;
     try {
       const key = await storeImage(file);
+      if (!state.boards.includes(board)) {
+        showToast("O quadro foi excluído. A imagem carregada permanece no armazenamento local.");
+        return;
+      }
       const oldCover = board.coverId;
       board.coverId = key;
       if (!save()) {
@@ -806,6 +834,7 @@
   viewport.addEventListener("pointerup", finishInteraction);
   viewport.addEventListener("pointercancel", finishInteraction);
   document.addEventListener("keydown", (event) => {
+    if (!currentBoard()) return;
     if (event.key === "Escape") { setMode("select"); selectedId = null; renderCards(); }
     if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !event.target.isContentEditable && event.target.tagName !== "INPUT") {
       event.preventDefault(); removeCard(selectedId);
@@ -815,6 +844,10 @@
   load();
   updateTheme();
   renderBoards();
-  renderCards();
-  initialView();
+  if (currentBoard()) {
+    renderCards();
+    initialView();
+  } else {
+    showHome();
+  }
 })();
