@@ -31,6 +31,9 @@
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"/></symbol>
     <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3Z"/></symbol>
     <symbol id="i-attachment" viewBox="0 0 24 24"><path d="m8 12 6-6a4 4 0 0 1 5.7 5.7l-7.5 7.5a5 5 0 0 1-7.1-7.1l7.5-7.5M7 15l7.5-7.5a2 2 0 0 1 2.8 2.8l-7.5 7.5"/></symbol>
+    <symbol id="i-area" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+    <symbol id="i-shape" viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="12" rx="1"/><circle cx="16" cy="16" r="5"/></symbol>
+    <symbol id="i-draw" viewBox="0 0 24 24"><path d="m4 20 4-1 11-11-3-3L5 16l-1 4ZM14 7l3 3"/></symbol>
   </svg>
 
   <div class="app">
@@ -106,12 +109,16 @@
               <g id="connection-lines"></g>
             </svg>
             <div id="cards"></div>
+            <div id="selection-area" class="selection-area" hidden></div>
           </div>
         </div>
 
         <div class="floating-toolbar" aria-label="Ferramentas do quadro">
           <button class="tool active" id="select-tool" title="Selecionar e mover notas" aria-label="Selecionar"><svg class="icon"><use href="#i-cursor"/></svg></button>
           <button class="tool" id="hand-tool" title="Mover o quadro" aria-label="Mover quadro"><svg class="icon"><use href="#i-hand"/></svg></button>
+          <button class="tool" id="area-tool" title="Selecionar uma área" aria-label="Selecionar uma área"><svg class="icon"><use href="#i-area"/></svg></button>
+          <button class="tool" id="shape-tool" title="Adicionar forma geométrica" aria-label="Adicionar forma geométrica"><svg class="icon"><use href="#i-shape"/></svg></button>
+          <button class="tool" id="draw-tool" title="Desenhar à mão livre" aria-label="Desenhar à mão livre"><svg class="icon"><use href="#i-draw"/></svg></button>
           <span class="tool-divider"></span>
           <button class="tool" id="add-note" title="Adicionar nota" aria-label="Adicionar nota"><svg class="icon"><use href="#i-note"/></svg></button>
           <button class="tool" id="add-sticky" title="Adicionar lembrete" aria-label="Adicionar lembrete"><span class="sticky-tool"></span></button>
@@ -123,7 +130,14 @@
           <button class="tool" id="add-folder" title="Adicionar pasta" aria-label="Adicionar pasta"><svg class="icon"><use href="#i-folder"/></svg></button>
           <button class="tool" id="connect-tool" title="Conectar notas" aria-label="Conectar notas"><svg class="icon"><use href="#i-arrow"/></svg></button>
           <span class="tool-divider"></span>
-          <button class="tool" id="delete-tool" title="Excluir nota selecionada" aria-label="Excluir nota selecionada"><svg class="icon"><use href="#i-trash"/></svg></button>
+          <button class="tool" id="delete-tool" title="Excluir itens selecionados" aria-label="Excluir itens selecionados"><svg class="icon"><use href="#i-trash"/></svg></button>
+        </div>
+        <div class="drawing-options" id="drawing-options" hidden>
+          <label id="shape-option" hidden>Forma <select id="shape-kind" aria-label="Tipo de forma"><option value="rectangle">Retângulo</option><option value="ellipse">Elipse</option><option value="triangle">Triângulo</option></select></label>
+          <label id="brush-option" hidden>Pincel <select id="brush-kind" aria-label="Tipo de pincel"><option value="pen">Caneta</option><option value="marker">Marcador</option><option value="dashed">Tracejado</option></select></label>
+          <label>Cor <input id="drawing-color" type="color" value="#8e77aa" aria-label="Cor do desenho ou forma"></label>
+          <label id="brush-size-option" hidden>Espessura <input id="brush-size" type="range" min="1" max="30" value="4" aria-label="Espessura do pincel"><output id="brush-size-value">4</output></label>
+          <span id="drawing-hint"></span>
         </div>
         <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         <input id="document-input" type="file" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.md,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp" hidden>

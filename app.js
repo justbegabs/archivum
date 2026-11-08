@@ -30,6 +30,7 @@
   };
   let state = { boards: [initialBoard], activeBoardId: initialBoard.id };
   let selectedId = null;
+  let selectedIds = new Set();
   let mode = "select";
   let connectionStart = null;
   let zoom = 1;
@@ -296,6 +297,7 @@
     state.activeBoardId = boardId;
     folderPath = [];
     selectedId = null;
+    selectedIds.clear();
     document.body.classList.remove("show-home");
     $("#home").hidden = true;
     $("#export").hidden = false;
@@ -308,8 +310,20 @@
   function renderCards() {
     const board = currentCanvas();
     cardsElement.innerHTML = board.cards.map((card) => {
-      const controls = `<div class="card-controls"><button data-action="connect" title="Conectar nota" aria-label="Conectar nota">${icon("link")}</button><button data-action="delete" title="Excluir nota" aria-label="Excluir nota">${icon("trash")}</button></div>`;
-      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}" style="left:${card.x}px;top:${card.y}px;width:${card.width}px"`;
+      const controls = `<div class="card-controls"><button data-action="connect" title="Conectar item" aria-label="Conectar item">${icon("link")}</button><button data-action="delete" title="Excluir item" aria-label="Excluir item">${icon("trash")}</button></div>`;
+      const attributes = `class="card card-${escapeHTML(card.type)} ${card.id === selectedId || selectedIds.has(card.id) ? "selected" : ""} ${card.id === connectionStart ? "connect-source" : ""} ${mode === "connect" ? "connect-target" : ""}" data-card-id="${escapeHTML(card.id)}" style="left:${card.x}px;top:${card.y}px;width:${card.width}px${card.type === "shape" || card.type === "drawing" ? `;height:${card.height}px` : ""}"`;
+      if (card.type === "shape") {
+        const color = /^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa";
+        const shape = card.shape === "ellipse" ? `<ellipse cx="50" cy="50" rx="48" ry="48"/>` : card.shape === "triangle" ? `<polygon points="50,2 98,98 2,98"/>` : `<rect x="2" y="2" width="96" height="96" rx="2"/>`;
+        return `<article ${attributes}>${controls}<svg class="shape-image" viewBox="0 0 100 100" preserveAspectRatio="none" style="color:${color}" aria-label="Forma geométrica">${shape}</svg><button class="shape-resize" data-resize-shape aria-label="Redimensionar forma" title="Arraste para redimensionar"></button></article>`;
+      }
+      if (card.type === "drawing") {
+        const color = /^#[0-9a-f]{6}$/i.test(card.color) ? card.color : "#8e77aa";
+        const points = Array.isArray(card.points) ? card.points.filter((point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) : [];
+        const path = points.map((point, index) => `${index ? "L" : "M"}${point[0]} ${point[1]}`).join(" ");
+        const size = Math.min(30, Math.max(1, Number(card.brushSize) || 4));
+        return `<article ${attributes}>${controls}<svg class="drawing-image" width="${card.width}" height="${card.height}" aria-label="Desenho"><path d="${path}${points.length === 1 ? " l0.01 0" : ""}" fill="none" stroke="${color}" stroke-width="${size}" stroke-linecap="round" stroke-linejoin="round" ${card.brush === "marker" ? 'opacity=".35"' : ""} ${card.brush === "dashed" ? `stroke-dasharray="${size * 2} ${size * 2}"` : ""}/></svg></article>`;
+      }
       if (card.type === "text") return `<article ${attributes}>${controls}<div class="card-inner"><div class="rich-text" contenteditable="true" role="textbox" aria-label="Texto formatável" aria-multiline="true" data-field="html">${sanitizeRichText(card.html || "")}</div></div></article>`;
       if (card.type === "image") return `<article ${attributes}>${controls}<div class="card-inner"><img class="attached-image" ${card.imageId ? `data-media-id="${escapeHTML(card.imageId)}"` : `src="${escapeHTML(card.image || "")}"`} alt="${escapeHTML(card.alt || "Imagem anexada")}" draggable="false"></div></article>`;
       if (card.type === "document" || card.type === "video") {
@@ -411,7 +425,15 @@
     $("#select-tool").classList.toggle("active", mode === "select");
     $("#hand-tool").classList.toggle("active", mode === "hand");
     $("#connect-tool").classList.toggle("active", mode === "connect");
-    viewport.style.cursor = mode === "hand" ? "grab" : mode === "connect" ? "crosshair" : "default";
+    $("#area-tool").classList.toggle("active", mode === "area");
+    $("#shape-tool").classList.toggle("active", mode === "shape");
+    $("#draw-tool").classList.toggle("active", mode === "draw");
+    $("#drawing-options").hidden = !["shape", "draw"].includes(mode);
+    $("#shape-option").hidden = mode !== "shape";
+    $("#brush-option").hidden = mode !== "draw";
+    $("#brush-size-option").hidden = mode !== "draw";
+    $("#drawing-hint").textContent = mode === "shape" ? "Arraste para criar uma forma." : mode === "draw" ? "Arraste para desenhar." : "";
+    viewport.style.cursor = mode === "hand" ? "grab" : ["connect", "area", "shape", "draw"].includes(mode) ? "crosshair" : "default";
     renderCards();
   }
 
@@ -427,6 +449,7 @@
     };
     const card = { id: id(), type, x: Math.max(0, Math.round(centerX - 100)), y: Math.max(0, Math.round(centerY - 60)), ...templates[type] };
     currentCanvas().cards.push(card);
+    selectedIds.clear();
     selectedId = card.id;
     setMode("select");
     save();
@@ -448,6 +471,7 @@
     board.cards = board.cards.filter((card) => card.id !== cardId);
     board.connections = board.connections.filter((connection) => connection.from !== cardId && connection.to !== cardId);
     selectedId = null;
+    selectedIds.clear();
     connectionStart = null;
     hideFormatting();
     renderCards();
@@ -464,6 +488,38 @@
       board.connections = oldConnections;
       renderCards();
     }
+  }
+
+  function deleteSelection() {
+    if (selectedIds.size <= 1) {
+      if (selectedId) removeCard(selectedId);
+      else showToast("Selecione um item primeiro.");
+      return;
+    }
+    if (!window.confirm(`Excluir ${selectedIds.size} itens selecionados, incluindo o conteúdo das pastas?`)) return;
+    const board = currentCanvas();
+    const removed = board.cards.filter((card) => selectedIds.has(card.id));
+    const oldCards = board.cards;
+    const oldConnections = board.connections;
+    board.cards = board.cards.filter((card) => !selectedIds.has(card.id));
+    board.connections = board.connections.filter((connection) => !selectedIds.has(connection.from) && !selectedIds.has(connection.to));
+    if (!save()) {
+      board.cards = oldCards;
+      board.connections = oldConnections;
+      return;
+    }
+    const removeFiles = (card) => {
+      if (card.imageId) removeMedia(card.imageId);
+      if (card.fileId) removeMedia(card.fileId);
+      if (card.type === "folder") card.cards.forEach(removeFiles);
+    };
+    removed.forEach(removeFiles);
+    selectedIds.clear();
+    selectedId = null;
+    connectionStart = null;
+    hideFormatting();
+    renderCards();
+    showToast("Itens excluídos.");
   }
 
   function connectCard(cardId) {
@@ -499,6 +555,7 @@
     $("#home").hidden = true;
     $("#export").hidden = false;
     selectedId = null;
+    selectedIds.clear();
     zoom = 1; pan = { x: 0, y: 0 };
     updateTransform();
     renderBoards();
@@ -527,6 +584,7 @@
     }
     folderPath = [];
     selectedId = null;
+    selectedIds.clear();
     connectionStart = null;
     renderBoards();
     showHome();
@@ -603,6 +661,7 @@
   $("#folder-back").addEventListener("click", () => {
     folderPath.pop();
     selectedId = null;
+    selectedIds.clear();
     renderCanvasTitle();
     setMode("select");
     initialView();
@@ -648,6 +707,7 @@
       }
       if (currentCanvas() === board && $("#home").hidden) {
         selectedId = card.id;
+        selectedIds.clear();
         setMode("select");
       }
     } catch (error) {
@@ -672,8 +732,12 @@
   });
   $("#select-tool").addEventListener("click", () => setMode("select"));
   $("#hand-tool").addEventListener("click", () => setMode("hand"));
+  $("#area-tool").addEventListener("click", () => setMode("area"));
+  $("#shape-tool").addEventListener("click", () => setMode("shape"));
+  $("#draw-tool").addEventListener("click", () => setMode("draw"));
+  $("#brush-size").addEventListener("input", (event) => { $("#brush-size-value").textContent = event.target.value; });
   $("#connect-tool").addEventListener("click", () => { setMode("connect"); showToast("Selecione a primeira nota para conectar."); });
-  $("#delete-tool").addEventListener("click", () => selectedId ? removeCard(selectedId) : showToast("Selecione uma nota primeiro."));
+  $("#delete-tool").addEventListener("click", deleteSelection);
   $("#zoom-in").addEventListener("click", () => { zoom = Math.min(1.75, Math.round((zoom + 0.1) * 100) / 100); updateTransform(); });
   $("#zoom-out").addEventListener("click", () => { zoom = Math.max(0.2, Math.round((zoom - 0.1) * 100) / 100); updateTransform(); });
   $("#zoom-level").addEventListener("click", () => { zoom = 1; updateTransform(); });
@@ -774,70 +838,188 @@
         folder.title = folder.title.trim() || "Sem título";
         folderPath.push(folder.id);
         selectedId = null;
+        selectedIds.clear();
         renderCanvasTitle();
         setMode("select");
         initialView();
       }
       return;
     }
-    if (mode === "connect") { event.preventDefault(); connectCard(cardId); return; }
+    if (mode === "connect") { selectedIds.clear(); event.preventDefault(); connectCard(cardId); return; }
+    if (mode !== "select") return;
+    if (selectedIds.size > 1 && selectedIds.has(cardId)) return;
     if (selectedId !== cardId) {
       if (activeTextId !== cardId) hideFormatting();
       selectedId = cardId;
+      selectedIds = new Set([cardId]);
       cardsElement.querySelectorAll(".card").forEach((el) => el.classList.toggle("selected", el.dataset.cardId === cardId));
     }
   });
+  function worldPoint(event) {
+    const bounds = viewport.getBoundingClientRect();
+    return { x: Math.max(0, (event.clientX - bounds.left - pan.x) / zoom), y: Math.max(0, (event.clientY - bounds.top - pan.y) / zoom) };
+  }
+
+  function updateSelectionVisual() {
+    cardsElement.querySelectorAll(".card").forEach((el) => el.classList.toggle("selected", selectedIds.has(el.dataset.cardId)));
+  }
+
+  function showSelectionBox(start, end) {
+    const box = $("#selection-area");
+    box.hidden = false;
+    box.style.left = `${Math.min(start.x, end.x)}px`;
+    box.style.top = `${Math.min(start.y, end.y)}px`;
+    box.style.width = `${Math.abs(end.x - start.x)}px`;
+    box.style.height = `${Math.abs(end.y - start.y)}px`;
+  }
+
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || interaction) return;
     const cardElement = event.target.closest("[data-card-id]");
-    if (mode === "connect" || event.target.closest("[data-action]") || (mode !== "hand" && event.target.closest("video, .attachment-download"))) return;
-    if (mode === "hand" || !cardElement) {
-      if (mode !== "hand" && !cardElement) {
+    if (mode === "connect") return;
+    const start = worldPoint(event);
+    if (mode === "draw" || mode === "shape" || mode === "area" || (mode === "select" && !cardElement && event.pointerType !== "touch")) {
+      hideFormatting();
+      selectedId = null;
+      selectedIds.clear();
+      updateSelectionVisual();
+      interaction = { type: mode === "select" ? "area" : mode, pointerId: event.pointerId, start, end: start, points: [[start.x, start.y]] };
+      if (interaction.type === "draw") {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        svg.classList.add("drawing-preview");
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", $("#drawing-color").value);
+        path.setAttribute("stroke-width", $("#brush-size").value);
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        if ($("#brush-kind").value === "marker") path.setAttribute("opacity", ".35");
+        if ($("#brush-kind").value === "dashed") path.setAttribute("stroke-dasharray", `${Number($("#brush-size").value) * 2} ${Number($("#brush-size").value) * 2}`);
+        path.setAttribute("d", `M${start.x} ${start.y} l0.01 0`);
+        svg.appendChild(path);
+        world.appendChild(svg);
+        interaction.preview = svg;
+        interaction.path = path;
+      } else showSelectionBox(start, start);
+    } else if (mode === "hand" || !cardElement) {
+      if (mode !== "hand") {
         selectedId = null;
+        selectedIds.clear();
         hideFormatting();
-        cardsElement.querySelectorAll(".card").forEach((el) => el.classList.remove("selected"));
-        if (event.pointerType !== "touch") return;
+        updateSelectionVisual();
       }
-      interaction = { type: "pan", startX: event.clientX, startY: event.clientY, x: pan.x, y: pan.y };
+      interaction = { type: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: pan.x, y: pan.y };
       viewport.style.cursor = "grabbing";
     } else {
-      if (event.target.closest("[contenteditable]")) return;
+      if (event.target.closest("[data-action], [contenteditable], video, .attachment-download")) return;
       const card = currentCanvas().cards.find((item) => item.id === cardElement.dataset.cardId);
-      interaction = { type: "card", card, element: cardElement, startX: event.clientX, startY: event.clientY, x: card.x, y: card.y };
+      if (!card) return;
+      if (!selectedIds.has(card.id)) selectedIds = new Set([card.id]);
       selectedId = card.id;
-      cardsElement.querySelectorAll(".card").forEach((el) => el.classList.toggle("selected", el === cardElement));
+      updateSelectionVisual();
+      if (event.target.closest("[data-resize-shape]") && card.type === "shape") {
+        interaction = { type: "resize", pointerId: event.pointerId, card, element: cardElement, startX: event.clientX, startY: event.clientY, width: card.width, height: card.height };
+      } else {
+        const items = currentCanvas().cards.filter((item) => selectedIds.has(item.id)).map((item) => ({
+          card: item, x: item.x, y: item.y, element: cardsElement.querySelector(`[data-card-id="${CSS.escape(item.id)}"]`)
+        }));
+        interaction = { type: "card", pointerId: event.pointerId, items, startX: event.clientX, startY: event.clientY };
+      }
     }
     viewport.setPointerCapture(event.pointerId);
     event.preventDefault();
   });
   viewport.addEventListener("pointermove", (event) => {
-    if (!interaction) return;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
     const dx = event.clientX - interaction.startX;
     const dy = event.clientY - interaction.startY;
     if (interaction.type === "pan") {
       pan = { x: interaction.x + dx, y: interaction.y + dy };
       updateTransform();
-    } else {
-      interaction.card.x = Math.max(0, Math.round(interaction.x + dx / zoom));
-      interaction.card.y = Math.max(0, Math.round(interaction.y + dy / zoom));
-      interaction.element.style.left = `${interaction.card.x}px`;
-      interaction.element.style.top = `${interaction.card.y}px`;
+    } else if (interaction.type === "card") {
+      const moveX = Math.max(Math.round(dx / zoom), -Math.min(...interaction.items.map((item) => item.x)));
+      const moveY = Math.max(Math.round(dy / zoom), -Math.min(...interaction.items.map((item) => item.y)));
+      interaction.items.forEach((item) => {
+        item.card.x = item.x + moveX;
+        item.card.y = item.y + moveY;
+        item.element.style.left = `${item.card.x}px`;
+        item.element.style.top = `${item.card.y}px`;
+      });
       renderConnections();
+    } else if (interaction.type === "resize") {
+      interaction.card.width = Math.max(30, Math.round(interaction.width + dx / zoom));
+      interaction.card.height = Math.max(30, Math.round(interaction.height + dy / zoom));
+      interaction.element.style.width = `${interaction.card.width}px`;
+      interaction.element.style.height = `${interaction.card.height}px`;
+      renderConnections();
+    } else {
+      interaction.end = worldPoint(event);
+      if (interaction.type === "draw") {
+        interaction.points.push([interaction.end.x, interaction.end.y]);
+        interaction.path.setAttribute("d", interaction.points.map((point, index) => `${index ? "L" : "M"}${point[0]} ${point[1]}`).join(" "));
+      } else showSelectionBox(interaction.start, interaction.end);
     }
   });
-  function finishInteraction() {
-    if (!interaction) return;
-    if (interaction.type === "card") save();
+  function finishInteraction(event) {
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    const active = interaction;
     interaction = null;
-    viewport.style.cursor = mode === "hand" ? "grab" : "default";
+    $("#selection-area").hidden = true;
+    if (active.preview) active.preview.remove();
+    const cancelled = event.type === "pointercancel";
+    if (active.type === "card" || active.type === "resize") {
+      if (cancelled) {
+        if (active.type === "card") active.items.forEach((item) => { item.card.x = item.x; item.card.y = item.y; });
+        else { active.card.width = active.width; active.card.height = active.height; }
+        renderCards();
+      } else save();
+    } else if (!cancelled && active.type === "area") {
+      const left = Math.min(active.start.x, active.end.x);
+      const top = Math.min(active.start.y, active.end.y);
+      const right = Math.max(active.start.x, active.end.x);
+      const bottom = Math.max(active.start.y, active.end.y);
+      if (right - left > 2 && bottom - top > 2) {
+        currentCanvas().cards.forEach((card) => {
+          const el = cardsElement.querySelector(`[data-card-id="${CSS.escape(card.id)}"]`);
+          if (el && card.x < right && card.x + el.offsetWidth > left && card.y < bottom && card.y + el.offsetHeight > top) selectedIds.add(card.id);
+        });
+      }
+      selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
+      updateSelectionVisual();
+    } else if (!cancelled && (active.type === "shape" || active.type === "draw")) {
+      const board = currentCanvas();
+      let card;
+      if (active.type === "shape") {
+        const width = Math.abs(active.end.x - active.start.x);
+        const height = Math.abs(active.end.y - active.start.y);
+        if (width < 10 || height < 10) { showToast("Arraste para definir o tamanho da forma."); return; }
+        card = { id: id(), type: "shape", shape: $("#shape-kind").value, color: $("#drawing-color").value, x: Math.round(Math.min(active.start.x, active.end.x)), y: Math.round(Math.min(active.start.y, active.end.y)), width: Math.round(width), height: Math.round(height) };
+      } else {
+        const size = Number($("#brush-size").value);
+        const padding = size / 2 + 2;
+        const bounds = active.points.reduce((result, [x, y]) => ({
+          minX: Math.min(result.minX, x), minY: Math.min(result.minY, y),
+          maxX: Math.max(result.maxX, x), maxY: Math.max(result.maxY, y)
+        }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+        const x = Math.max(0, Math.floor(bounds.minX - padding));
+        const y = Math.max(0, Math.floor(bounds.minY - padding));
+        card = { id: id(), type: "drawing", x, y, width: Math.ceil(bounds.maxX - x + padding), height: Math.ceil(bounds.maxY - y + padding), color: $("#drawing-color").value, brush: $("#brush-kind").value, brushSize: size, points: active.points.map(([px, py]) => [Math.round((px - x) * 10) / 10, Math.round((py - y) * 10) / 10]) };
+      }
+      board.cards.push(card);
+      selectedId = card.id;
+      selectedIds = new Set([card.id]);
+      save();
+      renderCards();
+    }
+    viewport.style.cursor = mode === "hand" ? "grab" : ["connect", "area", "shape", "draw"].includes(mode) ? "crosshair" : "default";
   }
   viewport.addEventListener("pointerup", finishInteraction);
   viewport.addEventListener("pointercancel", finishInteraction);
   document.addEventListener("keydown", (event) => {
     if (!currentBoard()) return;
-    if (event.key === "Escape") { setMode("select"); selectedId = null; renderCards(); }
-    if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !event.target.isContentEditable && event.target.tagName !== "INPUT") {
-      event.preventDefault(); removeCard(selectedId);
+    if (event.key === "Escape") { setMode("select"); selectedId = null; selectedIds.clear(); renderCards(); }
+    if ((event.key === "Delete" || event.key === "Backspace") && (selectedId || selectedIds.size) && !event.target.isContentEditable && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) {
+      event.preventDefault(); deleteSelection();
     }
   });
 

@@ -11,6 +11,9 @@ Um quadro visual de anotações que funciona diretamente no navegador. Abra `ind
 - Selecione a ferramenta de seta e clique em duas notas para conectá-las.
 - Use o ícone de pasta para criar uma pasta dentro do quadro. Edite o nome, clique em **Abrir pasta** e adicione notas, imagens ou outras pastas em um espaço separado. Use **Voltar** para retornar. Excluir uma pasta apaga também seu conteúdo.
 - Use a ferramenta de mão para mover o quadro e os controles no canto inferior para ajustar a visualização.
+- Na ferramenta de seleção, arraste uma área vazia com o mouse para selecionar vários itens e arraste um deles para mover o grupo. No celular, use **Selecionar uma área** para selecionar e depois volte para **Selecionar** para mover o grupo; a ferramenta de mão continua disponível para navegar. Use a lixeira para excluir a seleção, com confirmação quando houver vários itens.
+- Use **Adicionar forma geométrica**, escolha retângulo, elipse ou triângulo e uma cor, e arraste no quadro para criar a forma. As formas ficam atrás dos demais itens; selecione uma forma para movê-la ou redimensioná-la pelo canto inferior direito.
+- Use **Desenhar à mão livre** para criar traços com caneta, marcador ou tracejado, escolhendo cor e espessura. Os desenhos podem ser selecionados, movidos e excluídos como outros itens e são salvos e exportados com o quadro.
 - No celular, arraste uma área vazia para navegar pelo quadro sem reduzir o texto; use o botão de centralizar para visualizar todas as notas.
 - Crie outros quadros na barra lateral. O botão de download exporta o quadro atual em JSON.
 - Clique em **entrelinhas** para acessar todos os quadros e adicionar ou alterar a imagem de capa de cada um.
